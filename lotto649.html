@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="大樂透對獎">
+<title>大樂透自動對獎</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mu:#6b7280;--bd:#e5e7eb;--up:#d92d20;--dn:#12a150;--ac:#2563eb}
+@media(prefers-color-scheme:dark){:root{--bg:#111418;--card:#1b2027;--tx:#eceff3;--mu:#98a2b3;--bd:#2d343d;--up:#ff6b5e;--dn:#3ddc84;--ac:#6ea0ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 -apple-system,"PingFang TC","Noto Sans TC",sans-serif;padding:env(safe-area-inset-top) 12px env(safe-area-inset-bottom)}
+main{max-width:680px;margin:0 auto;padding:14px 0 40px}
+h1{font-size:20px;margin:6px 0 12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input,textarea{flex:1;min-width:0;font:inherit;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx)}
+button{touch-action:manipulation;font:inherit;padding:9px 13px;border:0;border-radius:10px;background:var(--ac);color:#fff;cursor:pointer}
+button.g{background:var(--bg);color:var(--tx);border:1px solid var(--bd)}
+button.r{background:none;color:var(--up);border:1px solid var(--bd)}
+.mu{color:var(--mu);font-size:13px}
+.ball{display:inline-block;min-width:28px;height:28px;line-height:28px;text-align:center;border-radius:50%;background:var(--bg);border:1px solid var(--bd);font-size:14px;margin:2px}
+.ball.hit{background:var(--up);color:#fff;border-color:var(--up);font-weight:700}
+.ball.sp{background:#f59e0b;color:#fff;border-color:#f59e0b}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0;text-align:center}
+.stats div{background:var(--bg);border-radius:10px;padding:6px 2px}
+.stats b{display:block;font-size:17px}
+.up{color:var(--up)}.dn{color:var(--dn)}
+.tag{display:inline-block;padding:1px 8px;border-radius:6px;font-size:12px;background:var(--mu);color:#fff}
+.tag.ok{background:var(--dn)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:5px 3px;border-bottom:1px solid var(--bd);text-align:left}
+td.n,th.n{text-align:right}
+button.sm{padding:2px 8px;font-size:12px;margin:2px 2px 0 0}
+details summary{cursor:pointer;color:var(--ac);margin-top:6px}
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.sum b{display:block;font-size:20px}
+</style>
+</head>
+<body>
+<main>
+<h1>🎯 大樂透自動對獎</h1>
+
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <div><b id="latest">尚無開獎資料</b><div class="mu" id="msg"></div></div>
+    <button id="upd">更新開獎</button>
+  </div>
+</div>
+
+<div class="card">
+  <b>總計（所有組別）</b>
+  <div class="sum" id="sum" style="margin-top:8px"></div>
+  <div class="mu" style="margin-top:6px">成本與中獎金額分開累計，金額為稅前。</div>
+</div>
+
+<div class="card">
+  <b>各組累計對照</b>
+  <table id="brk" style="margin-top:6px"></table>
+</div>
+
+<div class="card">
+  <b>➕ 新增號碼（每組買 10 期）</b>
+  <textarea id="nums" rows="4" placeholder="每行一組，6 個號碼（1～49），空格或逗號分隔&#10;例如：03 11 18 25 34 47" style="width:100%;margin-top:8px"></textarea>
+  <div class="row" style="margin-top:8px">
+    <span class="mu">起始開獎日</span><input type="date" id="start" style="flex:0 0 160px">
+    <input id="label" placeholder="備註（選填）">
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button id="add">加入</button><button class="g" id="cancel" hidden>取消修改</button>
+    <button class="g" id="rnd">電腦選號</button>
+    <input id="rn" type="number" min="1" max="50" value="3" style="flex:0 0 64px"><span class="mu">組</span>
+  </div>
+  <div class="mu" id="amsg" style="margin-top:6px">起始開獎日＝你買的第一期的開獎日（週二、週五）。</div>
+</div>
+
+<div id="sets"></div>
+
+<details class="card" id="mbox">
+  <summary>開獎紀錄與手動輸入</summary>
+  <table id="dl" style="margin-top:8px"></table>
+  <p class="mu">頭獎、貳獎金額每期不同，請點上方列表的該期帶入表單，再填金額。</p>
+  <div class="row"><input id="mp" placeholder="期別"><input type="date" id="md"></div>
+  <div class="row" style="margin-top:6px"><input id="mm" placeholder="6 個號碼"><input id="ms" placeholder="特別號" style="flex:0 0 80px"></div>
+  <div class="row" style="margin-top:6px"><input id="a1" type="number" placeholder="頭獎金額(選填)"><input id="a2" type="number" placeholder="貳獎金額(選填)"></div>
+  <div class="row" style="margin-top:8px"><button id="msave">儲存此期</button><button class="r" id="mdel">刪除此期</button></div>
+</details>
+
+<div class="card row">
+  <button class="g" id="exp">匯出備份</button>
+  <button class="g" id="imp">匯入備份</button>
+  <input type="file" id="file" accept=".json" hidden>
+</div>
+<p class="mu">資料來源：台灣彩券官網公開資料；獎金：參獎 20,000、肆獎 4,000、伍獎 800、陸獎／柒獎／普獎 400，每注 50 元。頭獎、貳獎為變動獎金。紀錄存在本機瀏覽器，僅供參考，實際以台灣彩券公告為準。</p>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const PRICE=50,LEN=10;
+const PRIZE={參獎:20000,肆獎:4000,伍獎:800,陸獎:400,柒獎:400,普獎:400};
+const rd=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};
+const wr=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+let sets=rd('lottoSets',[]),draws=rd('lottoDraws',{});
+const today=()=>new Date().toLocaleDateString('sv');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $$=n=>'$'+n.toLocaleString();
+const pad=n=>String(n).padStart(2,'0');
+
+function tier(h,sp){
+  if(h==6)return'頭獎';if(h==5&&sp)return'貳獎';if(h==5)return'參獎';
+  if(h==4&&sp)return'肆獎';if(h==4)return'伍獎';
+  if(h==3&&sp)return'陸獎';if(h==2&&sp)return'柒獎';if(h==3)return'普獎';return'';
+}
+function amount(t,d){return t==='頭獎'?(d.a1||0):t==='貳獎'?(d.a2||0):(PRIZE[t]||0)}
+function evalSet(s){
+  const cov=Object.values(draws).filter(d=>d.d>=s.start)
+    .sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:(a.p<b.p?-1:1)).slice(0,LEN);
+  const rows=cov.map(d=>{
+    const h=s.n.filter(x=>d.m.includes(x)).length,sp=s.n.includes(d.s),t=tier(h,sp);
+    return{d,h,sp,t,amt:amount(t,d),pend:(t==='頭獎'&&!d.a1)||(t==='貳獎'&&!d.a2)};
+  });
+  return{rows,k:rows.length,cost:rows.length*PRICE,prize:rows.reduce((a,r)=>a+r.amt,0)};
+}
+
+// ---- data fetch ----
+const PROXIES=[u=>u,u=>'https://corsproxy.io/?'+encodeURIComponent(u),u=>'https://api.allorigins.win/raw?url='+encodeURIComponent(u),u=>'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(u)];
+let okProxy=0;
+async function jget(u){
+  const order=[okProxy,...PROXIES.keys()].filter((v,i,a)=>a.indexOf(v)===i);let err;
+  for(const i of order){
+    try{
+      let t;
+      const r=await Promise.race([fetch(PROXIES[i](u)),new Promise((_,rej)=>{t=setTimeout(()=>rej(new Error('逾時')),12000)})]);
+      clearTimeout(t);
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const j=await r.json();okProxy=i;return j;
+    }catch(e){err=e}
+  }
+  throw new Error('連線失敗：'+(err&&err.message||''));
+}
+function items(j){
+  let arr=null;
+  (function f(o){
+    if(arr||!o||typeof o!=='object')return;
+    if(Array.isArray(o)){if(o.length&&o[0]&&typeof o[0]==='object'&&'period' in o[0]){arr=o;return}o.forEach(f);return}
+    Object.values(o).forEach(f);
+  })(j);
+  return arr||[];
+}
+async function update(){
+  $('msg').textContent='更新中…';
+  const now=new Date();
+  let from=now;
+  sets.forEach(s=>{const d=new Date(s.start);if(d<from)from=d});
+  const months=[];
+  let y=now.getFullYear(),m=now.getMonth();
+  for(let i=0;i<14;i++){
+    months.push(y+'-'+pad(m+1));
+    if(y<from.getFullYear()||(y===from.getFullYear()&&m<=from.getMonth()))break;
+    m--;if(m<0){m=11;y--}
+  }
+  let added=0,fail='';
+  for(const mo of months){
+    try{
+      const j=await jget(`https://api.taiwanlottery.com/TLCAPIWebAPI/Lottery/Lotto649Result?month=${mo}&pageNum=1&pageSize=50`);
+      for(const it of items(j)){
+        const nums=(it.drawNumberSize||it.drawNumberAppear||[]).map(Number);
+        if(nums.length<7)continue;
+        const p=String(it.period),d=String(it.lotteryDate||'').slice(0,10);
+        const old=draws[p]||{};
+        if(!draws[p])added++;
+        draws[p]={p,d,m:nums.slice(0,6).sort((a,b)=>a-b),s:nums[6],a1:old.a1||0,a2:old.a2||0};
+      }
+    }catch(e){fail=e.message}
+  }
+  wr('lottoDraws',draws);render();
+  $('msg').textContent=Object.keys(draws).length?(fail?'部分月份更新失敗（'+fail+'），可手動輸入開獎號碼':'已更新，新增 '+added+' 期'):'抓不到開獎資料'+(fail?'（'+fail+'）':'')+'，請改用下方手動輸入';
+}
+
+// ---- render ----
+function balls(arr,hit,sp){return arr.map(x=>`<span class="ball ${hit&&hit.includes(x)?'hit':''} ${sp===x?'sp':''}">${pad(x)}</span>`).join('')}
+function render(){
+  const all=Object.values(draws).sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:(a.p<b.p?1:-1));
+  $('latest').innerHTML=all.length?`最新 ${all[0].p} 期（${all[0].d.slice(5)}）<div>${balls(all[0].m)}<span class="ball sp">${pad(all[0].s)}</span></div>`:'尚無開獎資料';
+  let tc=0,tp=0;const brk=[];
+  $('sets').innerHTML=sets.map((s,i)=>{
+    const e=evalSet(s);tc+=e.cost;tp+=e.prize;
+    const net=e.prize-e.cost,done=e.k>=LEN;
+    let cum=0;e.rows.forEach(r=>{cum+=r.amt;r.cum=cum});
+    brk.push({i,s,e,net});
+    return `<div class="card">
+    <div class="row" style="justify-content:space-between"><div><b>第${i+1}組</b> ${balls(s.n)}</div>
+      <span class="tag ${done?'ok':''}">${done?'已完成':'進行中'} ${e.k}/${LEN} 期</span></div>
+    <div class="mu">${esc(s.label||'')} 起始 ${s.start}</div>
+    <div class="stats"><div><span class="mu">累計成本</span><b>${$$(e.cost)}</b></div>
+      <div><span class="mu">累計中獎</span><b class="up">${$$(e.prize)}</b></div>
+      <div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div></div>
+    <details><summary>各期明細</summary><table><tr><th>期別</th><th>開獎</th><th>結果</th><th class="n">金額</th></tr>
+    ${e.rows.map(r=>`<tr><td>${r.d.p.slice(-3)}<div class="mu">${r.d.d.slice(5)}</div><button class="g sm" data-ed="${r.d.p}">改</button><button class="r sm" data-dd="${r.d.p}">刪</button></td>
+      <td>${balls(r.d.m,s.n,0).replace(/ball /g,'ball ')}<span class="ball sp">${pad(r.d.s)}</span></td>
+      <td>${r.t?'<b class="up">'+r.t+'</b>':'<span class="mu">未中</span>'}<div class="mu">中${r.h}${r.sp?'+特':''}</div></td>
+      <td class="n">${r.t?(r.pend?'待填':$$(r.amt)):''}<div class="mu">累計 ${$$(r.cum)}</div></td></tr>`).join('')||'<tr><td colspan="4" class="mu">尚無已開獎期數</td></tr>'}
+    </table></details>
+    <div class="row" style="margin-top:8px">${done?`<button class="g" data-renew="${i}">續買 10 期</button>`:''}<button class="g" data-edit="${i}">修改</button><button class="r" data-del="${i}">刪除</button></div></div>`;
+  }).join('')||'<div class="card mu">尚未新增號碼</div>';
+  $('brk').innerHTML='<tr><th>組</th><th class="n">成本</th><th class="n">中獎</th><th class="n">淨損益</th></tr>'+
+    brk.map(b=>`<tr><td><b>${b.i+1}</b> <span class="mu">${b.s.n.map(pad).join(' ')}</span><div class="mu">${b.e.k}/${LEN}期${b.s.label?'｜'+esc(b.s.label):''}</div></td><td class="n">${$$(b.e.cost)}</td><td class="n up">${$$(b.e.prize)}</td><td class="n ${b.net>=0?'up':'dn'}">${b.net<0?'-':''}${$$(Math.abs(b.net))}</td></tr>`).join('')
+    +(brk.length?`<tr><td><b>合計</b></td><td class="n"><b>${$$(tc)}</b></td><td class="n up"><b>${$$(tp)}</b></td><td class="n ${tp-tc>=0?'up':'dn'}"><b>${tp-tc<0?'-':''}${$$(Math.abs(tp-tc))}</b></td></tr>`:'<tr><td class="mu" colspan="4">尚未新增號碼</td></tr>');
+  const net=tp-tc;
+  $('sum').innerHTML=`<div><span class="mu">總成本</span><b>${$$(tc)}</b></div><div><span class="mu">總中獎</span><b class="up">${$$(tp)}</b></div><div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div>`;
+  $('dl').innerHTML='<tr><th>期別</th><th>日期</th><th>號碼</th></tr>'+all.slice(0,10).map(d=>`<tr data-p="${d.p}" style="cursor:pointer"><td>${d.p}</td><td>${d.d.slice(5)}</td><td>${d.m.map(pad).join(' ')} +${pad(d.s)}</td></tr>`).join('');
+}
+
+// ---- actions ----
+let pend=null;
+function ask(btn,fn){
+  if(pend&&pend.btn===btn){clearTimeout(pend.t);pend=null;fn();return}
+  if(pend){clearTimeout(pend.t);pend.btn.textContent=pend.txt}
+  const txt=btn.textContent;btn.textContent='再按一次確認';
+  pend={btn,txt,t:setTimeout(()=>{btn.textContent=txt;pend=null},3500)};
+}
+function parseLines(t){
+  const ok=[],bad=[];
+  t.split('\n').map(x=>x.trim()).filter(Boolean).forEach(l=>{
+    const n=(l.match(/\d+/g)||[]).map(Number);
+    if(n.length===6&&new Set(n).size===6&&n.every(x=>x>=1&&x<=49))ok.push(n.sort((a,b)=>a-b));else bad.push(l);
+  });
+  return{ok,bad};
+}
+let editIdx=-1;
+function endEdit(){editIdx=-1;$('add').textContent='加入';$('cancel').hidden=true;$('nums').value='';$('label').value='';$('start').value=today()}
+$('cancel').onclick=()=>{endEdit();$('amsg').textContent='已取消修改'};
+$('add').onclick=()=>{
+  if(editIdx>=0){
+    const{ok}=parseLines($('nums').value);
+    if(ok.length!==1){$('amsg').textContent='⚠️ 修改時只能填 1 組有效號碼（6 個不重複的 1～49）';return}
+    Object.assign(sets[editIdx],{n:ok[0],start:$('start').value||today(),label:$('label').value.trim()});
+    wr('lottoSets',sets);endEdit();$('amsg').textContent='已修改';render();return;
+  }
+  const{ok,bad}=parseLines($('nums').value);
+  if(!ok.length){$('amsg').textContent='⚠️ 沒有有效號碼（需 6 個不重複的 1～49）';return}
+  const st=$('start').value||today(),lb=$('label').value.trim();
+  ok.forEach(n=>sets.push({id:Date.now()+Math.random(),n,start:st,label:lb}));
+  wr('lottoSets',sets);$('nums').value='';
+  $('amsg').textContent='已加入 '+ok.length+' 組'+(bad.length?'；略過無效 '+bad.length+' 行':'');
+  render();
+};
+$('rnd').onclick=()=>{
+  const c=Math.min(50,Math.max(1,+$('rn').value||1));let out=[];
+  for(let i=0;i<c;i++){const s=new Set();while(s.size<6)s.add(1+Math.floor(Math.random()*49));out.push([...s].sort((a,b)=>a-b).map(pad).join(' '))}
+  $('nums').value=($('nums').value.trim()?$('nums').value.trim()+'\n':'')+out.join('\n');
+};
+$('sets').onclick=e=>{
+  const t=e.target;
+  if(t.dataset.del!==undefined){const i=+t.dataset.del;ask(t,()=>{sets.splice(i,1);wr('lottoSets',sets);render()})}
+  if(t.dataset.ed){
+    const d=draws[t.dataset.ed];if(!d)return;
+    $('mp').value=d.p;$('md').value=d.d;$('mm').value=d.m.join(' ');$('ms').value=d.s;$('a1').value=d.a1||'';$('a2').value=d.a2||'';
+    $('mbox').open=true;$('mbox').scrollIntoView({behavior:'smooth'});
+    $('msg').textContent='修改第 '+d.p+' 期：改好後按「儲存此期」（此期的修改會影響所有買到這期的組別）';
+  }
+  if(t.dataset.dd){
+    const p=t.dataset.dd;
+    if(draws[p])ask(t,()=>{delete draws[p];wr('lottoDraws',draws);render();$('msg').textContent='已刪除第 '+p+' 期'});
+  }
+  if(t.dataset.edit!==undefined){
+    editIdx=+t.dataset.edit;const x=sets[editIdx];
+    $('nums').value=x.n.map(pad).join(' ');$('start').value=x.start;$('label').value=x.label||'';
+    $('add').textContent='儲存修改';$('cancel').hidden=false;
+    $('amsg').textContent='修改中：改好號碼、起始日或備註後按「儲存修改」';
+    window.scrollTo(0,0);
+  }
+  if(t.dataset.renew!==undefined){
+    const s=sets[+t.dataset.renew],e2=evalSet(s),last=e2.rows[e2.rows.length-1].d.d;
+    const d=new Date(last);d.setDate(d.getDate()+1);
+    sets.push({id:Date.now(),n:s.n,start:d.toLocaleDateString('sv'),label:s.label});
+    wr('lottoSets',sets);render();
+  }
+};
+$('dl').onclick=e=>{
+  const tr=e.target.closest('tr[data-p]');if(!tr)return;
+  const d=draws[tr.dataset.p];
+  $('mp').value=d.p;$('md').value=d.d;$('mm').value=d.m.join(' ');$('ms').value=d.s;$('a1').value=d.a1||'';$('a2').value=d.a2||'';
+};
+$('msave').onclick=()=>{
+  const m=($('mm').value.match(/\d+/g)||[]).map(Number),s=+$('ms').value,p=$('mp').value.trim(),d=$('md').value;
+  if(!p||!d||m.length!==6||!s||new Set([...m,s]).size!==7){$('msg').textContent='⚠️ 請填期別、日期、6 個號碼與不重複的特別號';return}
+  draws[p]={p,d,m:m.sort((a,b)=>a-b),s,a1:+$('a1').value||0,a2:+$('a2').value||0};
+  wr('lottoDraws',draws);render();$('msg').textContent='已儲存第 '+p+' 期';
+};
+$('mdel').onclick=()=>{
+  const p=$('mp').value.trim();
+  if(!draws[p]){$('msg').textContent='⚠️ 找不到第 '+p+' 期，請先點上方列表選一期';return}
+  ask($('mdel'),()=>{
+    delete draws[p];wr('lottoDraws',draws);render();
+    ['mp','md','mm','ms','a1','a2'].forEach(i=>$(i).value='');$('msg').textContent='已刪除第 '+p+' 期';
+  });
+};
+$('upd').onclick=update;
+$('exp').onclick=()=>{
+  const l=document.createElement('a');
+  l.href=URL.createObjectURL(new Blob([JSON.stringify({sets,draws})],{type:'application/json'}));
+  l.download='lotto649-backup.json';l.click();
+};
+$('imp').onclick=()=>$('file').click();
+$('file').onchange=async e=>{
+  try{
+    const j=JSON.parse(await e.target.files[0].text());
+    if(Array.isArray(j.sets))sets=j.sets;if(j.draws&&typeof j.draws==='object')draws=j.draws;
+    wr('lottoSets',sets);wr('lottoDraws',draws);render();$('msg').textContent='已匯入備份';
+  }catch(err){$('msg').textContent='⚠️ 備份檔格式錯誤'}
+};
+$('start').value=today();
+render();update();
+</script>
+</body>
+</html>
