@@ -37,6 +37,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 .sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
 .sum b{display:block;font-size:20px}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <main>
@@ -87,10 +88,23 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
   <div class="row" style="margin-top:8px"><button id="msave">儲存此期</button><button class="r" id="mdel">刪除此期</button></div>
 </details>
 
-<div class="card row">
-  <button class="g" id="exp">匯出備份</button>
-  <button class="g" id="imp">匯入備份</button>
-  <input type="file" id="file" accept=".json" hidden>
+<div class="card">
+  <b>📤 匯出／匯入</b>
+  <div class="row" style="margin-top:8px">
+    <button id="xexp">匯出 Excel</button>
+    <button id="ximp">匯入 Excel</button>
+    <select id="xmode" style="padding:9px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font:inherit">
+      <option value="add">匯入方式：新增（保留現有）</option>
+      <option value="replace">匯入方式：取代現有號碼組</option>
+    </select>
+    <input type="file" id="xfile" accept=".xlsx,.xls,.csv" hidden>
+  </div>
+  <div class="mu" style="margin-top:6px">Excel 內含「號碼組」「開獎紀錄」「各期明細」三個工作表；匯入讀取前兩個，也可只用一個工作表，欄位為：號碼1～號碼6、起始開獎日、備註。</div>
+  <div class="row" style="margin-top:10px">
+    <button class="g" id="exp">匯出備份(JSON)</button>
+    <button class="g" id="imp">匯入備份(JSON)</button>
+    <input type="file" id="file" accept=".json" hidden>
+  </div>
 </div>
 <p class="mu">資料來源：台灣彩券官網公開資料；獎金：參獎 20,000、肆獎 4,000、伍獎 800、陸獎／柒獎／普獎 400，每注 50 元。頭獎、貳獎為變動獎金。紀錄存在本機瀏覽器，僅供參考，實際以台灣彩券公告為準。</p>
 </main>
@@ -310,6 +324,69 @@ $('file').onchange=async e=>{
     if(Array.isArray(j.sets))sets=j.sets;if(j.draws&&typeof j.draws==='object')draws=j.draws;
     wr('lottoSets',sets);wr('lottoDraws',draws);render();$('msg').textContent='已匯入備份';
   }catch(err){$('msg').textContent='⚠️ 備份檔格式錯誤'}
+};
+// ---- Excel ----
+const needX=()=>{if(typeof XLSX==='undefined'){$('msg').textContent='⚠️ Excel 元件未載入，請連上網路後重新整理再試';return true}return false};
+function download(blob,name){const l=document.createElement('a');l.href=URL.createObjectURL(blob);l.download=name;document.body.appendChild(l);l.click();l.remove()}
+$('xexp').onclick=()=>{
+  if(needX())return;
+  const H6=[1,2,3,4,5,6].map(i=>'號碼'+i);
+  const A=[['組',...H6,'起始開獎日','備註','已開期數','累計成本','累計中獎','淨損益']];
+  const C=[['組','號碼','期別','開獎日','中幾個','特別號','獎項','金額']];
+  sets.forEach((x,i)=>{
+    const e=evalSet(x);
+    A.push([i+1,...x.n,x.start,x.label||'',e.k,e.cost,e.prize,e.prize-e.cost]);
+    e.rows.forEach(r=>C.push([i+1,x.n.map(pad).join(' '),r.d.p,r.d.d,r.h,r.sp?'是':'否',r.t||'未中',r.amt]));
+  });
+  const B=[['期別','開獎日',...H6,'特別號','頭獎金額','貳獎金額']];
+  Object.values(draws).sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:(a.p<b.p?-1:1)).forEach(d=>B.push([d.p,d.d,...d.m,d.s,d.a1||'',d.a2||'']));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(A),'號碼組');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(B),'開獎紀錄');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(C),'各期明細');
+  const out=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  download(new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'lotto649.xlsx');
+  $('msg').textContent='已匯出 Excel';
+};
+$('ximp').onclick=()=>{if(!needX())$('xfile').click()};
+function nd(v){
+  if(v===''||v==null)return'';
+  if(typeof v==='number')return new Date(Math.round((v-25569)*86400000)).toISOString().slice(0,10);
+  const m=String(v).match(/(\d{4})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})/);
+  return m?m[1]+'-'+pad(+m[2])+'-'+pad(+m[3]):'';
+}
+$('xfile').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{
+    const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+    const rows=n=>wb.Sheets[n]?XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''}):null;
+    let sr=rows('號碼組'),dr=rows('開獎紀錄');
+    if(!sr&&!dr)sr=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+    let ns=0,nd2=0,skip=0,dup=0;
+    if(sr){
+      const got=[];
+      sr.forEach(v=>{
+        let n=[1,2,3,4,5,6].map(i=>v['號碼'+i]).filter(x=>x!=='').map(Number);
+        if(n.length!==6)n=(String(v['號碼']||'').match(/\d+/g)||[]).map(Number);
+        if(n.length!==6||new Set(n).size!==6||n.some(x=>!(x>=1&&x<=49))){if(Object.values(v).some(x=>x!==''))skip++;return}
+        got.push({id:Date.now()+Math.random(),n:n.sort((a,b)=>a-b),start:nd(v['起始開獎日']||v['起始日'])||today(),label:String(v['備註']||'')});
+      });
+      if($('xmode').value==='replace'){sets=got;ns=got.length}
+      else got.forEach(g=>{if(sets.some(x=>x.n.join()===g.n.join()&&x.start===g.start))dup++;else{sets.push(g);ns++}});
+      wr('lottoSets',sets);
+    }
+    if(dr){
+      dr.forEach(v=>{
+        const m=[1,2,3,4,5,6].map(i=>Number(v['號碼'+i])),sp=Number(v['特別號']),p=String(v['期別']).trim(),d=nd(v['開獎日']);
+        if(!p||!d||m.some(x=>!(x>=1&&x<=49))||!(sp>=1&&sp<=49)||new Set([...m,sp]).size!==7){if(p)skip++;return}
+        const old=draws[p]||{};
+        draws[p]={p,d,m:m.sort((a,b)=>a-b),s:sp,a1:Number(v['頭獎金額'])||old.a1||0,a2:Number(v['貳獎金額'])||old.a2||0};nd2++;
+      });
+      wr('lottoDraws',draws);
+    }
+    render();
+    $('msg').textContent=`匯入完成：號碼組 ${ns} 組、開獎 ${nd2} 期`+(dup?`，略過重複 ${dup} 組`:'')+(skip?`，格式不符略過 ${skip} 列`:'');
+  }catch(err){$('msg').textContent='⚠️ 無法讀取此檔案：'+err.message}
 };
 $('start').value=today();
 render();update();
