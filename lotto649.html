@@ -62,11 +62,14 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 </div>
 
 <div class="card">
-  <b>➕ 新增號碼（每組買 10 期）</b>
+  <b>➕ 新增號碼（期數不限，可一直累加）</b>
   <textarea id="nums" rows="4" placeholder="每行一組，6 個號碼（1～49），空格或逗號分隔&#10;例如：03 11 18 25 34 47" style="width:100%;margin-top:8px"></textarea>
   <div class="row" style="margin-top:8px">
     <span class="mu">起始開獎日</span><input type="date" id="start" style="flex:0 0 160px">
     <input id="label" placeholder="備註（選填）">
+  </div>
+  <div class="row" style="margin-top:8px">
+    <span class="mu">期數上限</span><input id="len" type="number" min="1" placeholder="留空＝不限期數" style="flex:0 0 150px">
   </div>
   <div class="row" style="margin-top:8px">
     <button id="add">加入</button><button class="g" id="cancel" hidden>取消修改</button>
@@ -99,7 +102,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
     </select>
     <input type="file" id="xfile" accept=".xlsx,.xls,.csv" hidden>
   </div>
-  <div class="mu" style="margin-top:6px">Excel 內含「號碼組」「開獎紀錄」「各期明細」三個工作表；匯入讀取前兩個，也可只用一個工作表，欄位為：號碼1～號碼6、起始開獎日、備註。</div>
+  <div class="mu" style="margin-top:6px">Excel 內含「號碼組」「開獎紀錄」「各期明細」三個工作表；匯入讀取前兩個，也可只用一個工作表，欄位為：號碼1～號碼6、起始開獎日、備註、期數上限（空白＝不限）。</div>
   <div class="row" style="margin-top:10px">
     <button class="g" id="exp">匯出備份(JSON)</button>
     <button class="g" id="imp">匯入備份(JSON)</button>
@@ -111,7 +114,9 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 
 <script>
 const $=id=>document.getElementById(id);
-const PRICE=50,LEN=10;
+const PRICE=50;
+const cap=s=>s.len>0?s.len:Infinity;
+const spanTxt=(s,e)=>s.len>0?e.k+'/'+s.len+' 期':'累計 '+e.k+' 期';
 const PRIZE={參獎:20000,肆獎:4000,伍獎:800,陸獎:400,柒獎:400,普獎:400};
 const rd=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};
 const wr=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
@@ -129,7 +134,7 @@ function tier(h,sp){
 function amount(t,d){return t==='頭獎'?(d.a1||0):t==='貳獎'?(d.a2||0):(PRIZE[t]||0)}
 function evalSet(s){
   const cov=Object.values(draws).filter(d=>d.d>=s.start)
-    .sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:(a.p<b.p?-1:1)).slice(0,LEN);
+    .sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:(a.p<b.p?-1:1)).slice(0,cap(s));
   const rows=cov.map(d=>{
     const h=s.n.filter(x=>d.m.includes(x)).length,sp=s.n.includes(d.s),t=tier(h,sp);
     return{d,h,sp,t,amt:amount(t,d),pend:(t==='頭獎'&&!d.a1)||(t==='貳獎'&&!d.a2)};
@@ -200,12 +205,12 @@ function render(){
   let tc=0,tp=0;const brk=[];
   $('sets').innerHTML=sets.map((s,i)=>{
     const e=evalSet(s);tc+=e.cost;tp+=e.prize;
-    const net=e.prize-e.cost,done=e.k>=LEN;
+    const net=e.prize-e.cost,done=s.len>0&&e.k>=s.len;
     let cum=0;e.rows.forEach(r=>{cum+=r.amt;r.cum=cum});
     brk.push({i,s,e,net});
     return `<div class="card">
     <div class="row" style="justify-content:space-between"><div><b>第${i+1}組</b> ${balls(s.n)}</div>
-      <span class="tag ${done?'ok':''}">${done?'已完成':'進行中'} ${e.k}/${LEN} 期</span></div>
+      <span class="tag ${done?'ok':''}">${done?'已完成':'進行中'} ${spanTxt(s,e)}</span></div>
     <div class="mu">${esc(s.label||'')} 起始 ${s.start}</div>
     <div class="stats"><div><span class="mu">累計成本</span><b>${$$(e.cost)}</b></div>
       <div><span class="mu">累計中獎</span><b class="up">${$$(e.prize)}</b></div>
@@ -216,10 +221,10 @@ function render(){
       <td>${r.t?'<b class="up">'+r.t+'</b>':'<span class="mu">未中</span>'}<div class="mu">中${r.h}${r.sp?'+特':''}</div></td>
       <td class="n">${r.t?(r.pend?'待填':$$(r.amt)):''}<div class="mu">累計 ${$$(r.cum)}</div></td></tr>`).join('')||'<tr><td colspan="4" class="mu">尚無已開獎期數</td></tr>'}
     </table></details>
-    <div class="row" style="margin-top:8px">${done?`<button class="g" data-renew="${i}">續買 10 期</button>`:''}<button class="g" data-edit="${i}">修改</button><button class="r" data-del="${i}">刪除</button></div></div>`;
+    <div class="row" style="margin-top:8px">${done?`<button class="g" data-renew="${i}">續買 ${s.len} 期</button>`:''}<button class="g" data-edit="${i}">修改</button><button class="r" data-del="${i}">刪除</button></div></div>`;
   }).join('')||'<div class="card mu">尚未新增號碼</div>';
   $('brk').innerHTML='<tr><th>組</th><th class="n">成本</th><th class="n">中獎</th><th class="n">淨損益</th></tr>'+
-    brk.map(b=>`<tr><td><b>${b.i+1}</b> <span class="mu">${b.s.n.map(pad).join(' ')}</span><div class="mu">${b.e.k}/${LEN}期${b.s.label?'｜'+esc(b.s.label):''}</div></td><td class="n">${$$(b.e.cost)}</td><td class="n up">${$$(b.e.prize)}</td><td class="n ${b.net>=0?'up':'dn'}">${b.net<0?'-':''}${$$(Math.abs(b.net))}</td></tr>`).join('')
+    brk.map(b=>`<tr><td><b>${b.i+1}</b> <span class="mu">${b.s.n.map(pad).join(' ')}</span><div class="mu">${spanTxt(b.s,b.e)}${b.s.label?'｜'+esc(b.s.label):''}</div></td><td class="n">${$$(b.e.cost)}</td><td class="n up">${$$(b.e.prize)}</td><td class="n ${b.net>=0?'up':'dn'}">${b.net<0?'-':''}${$$(Math.abs(b.net))}</td></tr>`).join('')
     +(brk.length?`<tr><td><b>合計</b></td><td class="n"><b>${$$(tc)}</b></td><td class="n up"><b>${$$(tp)}</b></td><td class="n ${tp-tc>=0?'up':'dn'}"><b>${tp-tc<0?'-':''}${$$(Math.abs(tp-tc))}</b></td></tr>`:'<tr><td class="mu" colspan="4">尚未新增號碼</td></tr>');
   const net=tp-tc;
   $('sum').innerHTML=`<div><span class="mu">總成本</span><b>${$$(tc)}</b></div><div><span class="mu">總中獎</span><b class="up">${$$(tp)}</b></div><div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div>`;
@@ -243,19 +248,19 @@ function parseLines(t){
   return{ok,bad};
 }
 let editIdx=-1;
-function endEdit(){editIdx=-1;$('add').textContent='加入';$('cancel').hidden=true;$('nums').value='';$('label').value='';$('start').value=today()}
+function endEdit(){editIdx=-1;$('add').textContent='加入';$('cancel').hidden=true;$('nums').value='';$('label').value='';$('len').value='';$('start').value=today()}
 $('cancel').onclick=()=>{endEdit();$('amsg').textContent='已取消修改'};
 $('add').onclick=()=>{
   if(editIdx>=0){
     const{ok}=parseLines($('nums').value);
     if(ok.length!==1){$('amsg').textContent='⚠️ 修改時只能填 1 組有效號碼（6 個不重複的 1～49）';return}
-    Object.assign(sets[editIdx],{n:ok[0],start:$('start').value||today(),label:$('label').value.trim()});
+    Object.assign(sets[editIdx],{n:ok[0],start:$('start').value||today(),label:$('label').value.trim(),len:parseInt($('len').value)||0});
     wr('lottoSets',sets);endEdit();$('amsg').textContent='已修改';render();return;
   }
   const{ok,bad}=parseLines($('nums').value);
   if(!ok.length){$('amsg').textContent='⚠️ 沒有有效號碼（需 6 個不重複的 1～49）';return}
-  const st=$('start').value||today(),lb=$('label').value.trim();
-  ok.forEach(n=>sets.push({id:Date.now()+Math.random(),n,start:st,label:lb}));
+  const st=$('start').value||today(),lb=$('label').value.trim(),ln=parseInt($('len').value)||0;
+  ok.forEach(n=>sets.push({id:Date.now()+Math.random(),n,start:st,label:lb,len:ln}));
   wr('lottoSets',sets);$('nums').value='';
   $('amsg').textContent='已加入 '+ok.length+' 組'+(bad.length?'；略過無效 '+bad.length+' 行':'');
   render();
@@ -280,7 +285,7 @@ $('sets').onclick=e=>{
   }
   if(t.dataset.edit!==undefined){
     editIdx=+t.dataset.edit;const x=sets[editIdx];
-    $('nums').value=x.n.map(pad).join(' ');$('start').value=x.start;$('label').value=x.label||'';
+    $('nums').value=x.n.map(pad).join(' ');$('start').value=x.start;$('label').value=x.label||'';$('len').value=x.len||'';
     $('add').textContent='儲存修改';$('cancel').hidden=false;
     $('amsg').textContent='修改中：改好號碼、起始日或備註後按「儲存修改」';
     window.scrollTo(0,0);
@@ -288,7 +293,7 @@ $('sets').onclick=e=>{
   if(t.dataset.renew!==undefined){
     const s=sets[+t.dataset.renew],e2=evalSet(s),last=e2.rows[e2.rows.length-1].d.d;
     const d=new Date(last);d.setDate(d.getDate()+1);
-    sets.push({id:Date.now(),n:s.n,start:d.toLocaleDateString('sv'),label:s.label});
+    sets.push({id:Date.now(),n:s.n,start:d.toLocaleDateString('sv'),label:s.label,len:s.len});
     wr('lottoSets',sets);render();
   }
 };
@@ -331,11 +336,11 @@ function download(blob,name){const l=document.createElement('a');l.href=URL.crea
 $('xexp').onclick=()=>{
   if(needX())return;
   const H6=[1,2,3,4,5,6].map(i=>'號碼'+i);
-  const A=[['組',...H6,'起始開獎日','備註','已開期數','累計成本','累計中獎','淨損益']];
+  const A=[['組',...H6,'起始開獎日','備註','期數上限','已開期數','累計成本','累計中獎','淨損益']];
   const C=[['組','號碼','期別','開獎日','中幾個','特別號','獎項','金額']];
   sets.forEach((x,i)=>{
     const e=evalSet(x);
-    A.push([i+1,...x.n,x.start,x.label||'',e.k,e.cost,e.prize,e.prize-e.cost]);
+    A.push([i+1,...x.n,x.start,x.label||'',x.len||'',e.k,e.cost,e.prize,e.prize-e.cost]);
     e.rows.forEach(r=>C.push([i+1,x.n.map(pad).join(' '),r.d.p,r.d.d,r.h,r.sp?'是':'否',r.t||'未中',r.amt]));
   });
   const B=[['期別','開獎日',...H6,'特別號','頭獎金額','貳獎金額']];
@@ -369,7 +374,7 @@ $('xfile').onchange=async e=>{
         let n=[1,2,3,4,5,6].map(i=>v['號碼'+i]).filter(x=>x!=='').map(Number);
         if(n.length!==6)n=(String(v['號碼']||'').match(/\d+/g)||[]).map(Number);
         if(n.length!==6||new Set(n).size!==6||n.some(x=>!(x>=1&&x<=49))){if(Object.values(v).some(x=>x!==''))skip++;return}
-        got.push({id:Date.now()+Math.random(),n:n.sort((a,b)=>a-b),start:nd(v['起始開獎日']||v['起始日'])||today(),label:String(v['備註']||'')});
+        got.push({id:Date.now()+Math.random(),n:n.sort((a,b)=>a-b),start:nd(v['起始開獎日']||v['起始日'])||today(),label:String(v['備註']||''),len:Number(v['期數上限'])||0});
       });
       if($('xmode').value==='replace'){sets=got;ns=got.length}
       else got.forEach(g=>{if(sets.some(x=>x.n.join()===g.n.join()&&x.start===g.start))dup++;else{sets.push(g);ns++}});
