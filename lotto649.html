@@ -41,7 +41,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 </head>
 <body>
 <main>
-<h1>🎯 大樂透自動對獎 <span class="mu">v9</span></h1>
+<h1>🎯 大樂透自動對獎 <span class="mu">v10</span></h1>
 
 <div class="card">
   <div class="row" style="justify-content:space-between">
@@ -121,7 +121,17 @@ const spanTxt=(s,e)=>s.len>0?e.k+'/'+s.len+' 期':'累計 '+e.k+' 期';
 const PRIZE={參獎:20000,肆獎:4000,伍獎:800,陸獎:400,柒獎:400,普獎:400};
 const rd=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};
 const wr=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
-let sets=rd('lottoSets',[]),draws=rd('lottoDraws',{});
+let sets=rd('lottoSets',[]),draws={};
+// 開獎紀錄以「開獎日」為唯一鍵（期別可能重複或為自訂編號）
+const longP=p=>/^\d{7,}$/.test(String(p));
+function putDraw(o){
+  const old=draws[o.d];let p=String(o.p||'');
+  if(old&&longP(old.p)&&!longP(p))p=old.p;
+  draws[o.d]={p,d:o.d,m:o.m,s:o.s,a1:o.a1||(old&&old.a1)||0,a2:o.a2||(old&&old.a2)||0};
+  return !old;
+}
+function normDraws(o){const src=Object.values(o||{});draws={};src.forEach(x=>{if(x&&x.d&&x.m)putDraw(x)})}
+normDraws(rd('lottoDraws',{}));try{localStorage.setItem('lottoDraws',JSON.stringify(draws))}catch(e){}
 const today=()=>new Date().toLocaleDateString('sv');
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const $$=n=>'$'+n.toLocaleString();
@@ -188,9 +198,7 @@ async function update(){
         const nums=(it.drawNumberSize||it.drawNumberAppear||[]).map(Number);
         if(nums.length<7)continue;
         const p=String(it.period),d=String(it.lotteryDate||'').slice(0,10);
-        const old=draws[p]||{};
-        if(!draws[p])added++;
-        draws[p]={p,d,m:nums.slice(0,6).sort((a,b)=>a-b),s:nums[6],a1:old.a1||0,a2:old.a2||0};
+        if(putDraw({p,d,m:nums.slice(0,6).sort((a,b)=>a-b),s:nums[6]}))added++;
       }
     }catch(e){fail=e.message}
   }
@@ -219,7 +227,7 @@ function render(){
       <div><span class="mu">累計中獎</span><b class="up">${$$(e.prize)}</b></div>
       <div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div></div>
     <details><summary>各期明細</summary><table><tr><th>期別</th><th>開獎</th><th>結果</th><th class="n">金額</th></tr>
-    ${e.rows.map(r=>`<tr><td>${r.d.p.slice(-3)}<div class="mu">${r.d.d.slice(5)}</div><button class="g sm" data-ed="${r.d.p}">改</button><button class="r sm" data-dd="${r.d.p}">刪</button></td>
+    ${e.rows.map(r=>`<tr><td>${r.d.p.slice(-3)}<div class="mu">${r.d.d.slice(5)}</div><button class="g sm" data-ed="${r.d.d}">改</button><button class="r sm" data-dd="${r.d.d}">刪</button></td>
       <td>${balls(r.d.m,s.n,0).replace(/ball /g,'ball ')}<span class="ball sp">${pad(r.d.s)}</span></td>
       <td>${r.t?'<b class="up">'+r.t+'</b>':'<span class="mu">未中</span>'}<div class="mu">中${r.h}${r.sp?'+特':''}</div></td>
       <td class="n">${r.t?(r.pend?'待填':$$(r.amt)):''}<div class="mu">累計 ${$$(r.cum)}</div></td></tr>`).join('')||'<tr><td colspan="4" class="mu">尚無已開獎期數</td></tr>'}
@@ -232,7 +240,7 @@ function render(){
   const net=tp-tc;
   $('sum').innerHTML=`<div><span class="mu">總成本</span><b>${$$(tc)}</b></div><div><span class="mu">總中獎</span><b class="up">${$$(tp)}</b></div><div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div>`;
   $('dcnt').textContent='共 '+rangeAll()+'開獎紀錄（由新到舊，可捲動）';
-  $('dl').innerHTML='<tr><th>期別</th><th>日期</th><th>號碼</th></tr>'+all.map(d=>`<tr data-p="${d.p}" style="cursor:pointer"><td>${d.p}</td><td>${d.d.slice(5)}</td><td>${d.m.map(pad).join(' ')} +${pad(d.s)}</td></tr>`).join('');
+  $('dl').innerHTML='<tr><th>期別</th><th>日期</th><th>號碼</th></tr>'+all.map(d=>`<tr data-p="${d.d}" style="cursor:pointer"><td>${d.p}</td><td>${d.d.slice(5)}</td><td>${d.m.map(pad).join(' ')} +${pad(d.s)}</td></tr>`).join('');
 }
 
 // ---- actions ----
@@ -309,14 +317,14 @@ $('dl').onclick=e=>{
 $('msave').onclick=()=>{
   const m=($('mm').value.match(/\d+/g)||[]).map(Number),s=+$('ms').value,p=$('mp').value.trim(),d=$('md').value;
   if(!p||!d||m.length!==6||!s||new Set([...m,s]).size!==7){$('msg').textContent='⚠️ 請填期別、日期、6 個號碼與不重複的特別號';return}
-  draws[p]={p,d,m:m.sort((a,b)=>a-b),s,a1:+$('a1').value||0,a2:+$('a2').value||0};
-  wr('lottoDraws',draws);render();$('msg').textContent='已儲存第 '+p+' 期';
+  putDraw({p,d,m:m.sort((a,b)=>a-b),s,a1:+$('a1').value||0,a2:+$('a2').value||0});
+  wr('lottoDraws',draws);render();$('msg').textContent='已儲存 '+d+' 這一期';
 };
 $('mdel').onclick=()=>{
-  const p=$('mp').value.trim();
-  if(!draws[p]){$('msg').textContent='⚠️ 找不到第 '+p+' 期，請先點上方列表選一期';return}
+  const p=$('mp').value.trim(),k=draws[$('md').value]?$('md').value:Object.keys(draws).find(x=>draws[x].p===p);
+  if(!k){$('msg').textContent='⚠️ 找不到這一期，請先點上方列表選一期';return}
   ask($('mdel'),()=>{
-    delete draws[p];wr('lottoDraws',draws);render();
+    delete draws[k];wr('lottoDraws',draws);render();
     ['mp','md','mm','ms','a1','a2'].forEach(i=>$(i).value='');$('msg').textContent='已刪除第 '+p+' 期';
   });
 };
@@ -330,7 +338,7 @@ $('imp').onclick=()=>$('file').click();
 $('file').onchange=async e=>{
   try{
     const j=JSON.parse(await e.target.files[0].text());
-    if(Array.isArray(j.sets))sets=j.sets;if(j.draws&&typeof j.draws==='object')draws=j.draws;
+    if(Array.isArray(j.sets))sets=j.sets;if(j.draws&&typeof j.draws==='object')normDraws(j.draws);
     wr('lottoSets',sets);wr('lottoDraws',draws);render();$('msg').textContent='已匯入備份';
   }catch(err){$('msg').textContent='⚠️ 備份檔格式錯誤'}
 };
@@ -398,8 +406,7 @@ $('xfile').onchange=async e=>{
           const d=nd(pick(v,['開獎日','開獎日期','日期']));
           if(!p&&!d&&!m.length)return;
           if(!p||!d||m.length!==6||m.some(x=>!(x>=1&&x<=49))||!(sp>=1&&sp<=49)||new Set([...m,sp]).size!==7){skip++;if(!why)why='第 '+(idx+2)+' 列（期別='+p+'，日期='+(d||'無法辨識')+'，號碼='+m.join(' ')+'，特別號='+sp+'）';return}
-          const old=draws[p]||{};
-          draws[p]={p,d,m:m.sort((a,b)=>a-b),s:sp,a1:Number(pick(v,['頭獎金額']))||old.a1||0,a2:Number(pick(v,['貳獎金額']))||old.a2||0};nd2++;
+          putDraw({p,d,m:m.sort((a,b)=>a-b),s:sp,a1:Number(pick(v,['頭獎金額']))||0,a2:Number(pick(v,['貳獎金額']))||0});nd2++;
         });
       }else if(isSet){
         setSeen=true;seen.push(name+'(號碼組)');
