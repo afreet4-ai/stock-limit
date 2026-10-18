@@ -356,41 +356,65 @@ $('xexp').onclick=()=>{
 $('ximp').onclick=()=>{if(!needX())$('xfile').click()};
 function nd(v){
   if(v===''||v==null)return'';
-  if(typeof v==='number')return new Date(Math.round((v-25569)*86400000)).toISOString().slice(0,10);
-  const m=String(v).match(/(\d{4})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})/);
-  return m?m[1]+'-'+pad(+m[2])+'-'+pad(+m[3]):'';
+  if(typeof v==='number'){if(v>=20000&&v<80000)return new Date(Math.round((v-25569)*86400000)).toISOString().slice(0,10);v=String(v)}
+  v=String(v).trim();
+  let m=v.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if(m)return m[1]+'-'+m[2]+'-'+m[3];
+  m=v.match(/(\d{2,4})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})/);
+  if(!m)return'';
+  let y=+m[1];if(y<200)y+=1911;
+  return y+'-'+pad(+m[2])+'-'+pad(+m[3]);
 }
+const pick=(v,names)=>{for(const k of names){if(v[k]!==undefined&&v[k]!=='')return v[k]}return''};
+const numsOf=(v,pre,single)=>{
+  let n=[1,2,3,4,5,6].map(i=>pick(v,[pre+i,pre+'_'+i])).filter(x=>x!=='').map(Number);
+  if(n.length<6){const t=pick(v,single);if(t!=='')n=String(t).match(/\d+/g)?String(t).match(/\d+/g).map(Number):[]}
+  return n;
+};
 $('xfile').onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f)return;
   try{
     const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
-    const rows=n=>wb.Sheets[n]?XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''}):null;
-    let sr=rows('號碼組'),dr=rows('開獎紀錄');
-    if(!sr&&!dr)sr=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
-    let ns=0,nd2=0,skip=0,dup=0;
-    if(sr){
-      const got=[];
-      sr.forEach(v=>{
-        let n=[1,2,3,4,5,6].map(i=>v['號碼'+i]).filter(x=>x!=='').map(Number);
-        if(n.length!==6)n=(String(v['號碼']||'').match(/\d+/g)||[]).map(Number);
-        if(n.length!==6||new Set(n).size!==6||n.some(x=>!(x>=1&&x<=49))){if(Object.values(v).some(x=>x!==''))skip++;return}
-        got.push({id:Date.now()+Math.random(),n:n.sort((a,b)=>a-b),start:nd(v['起始開獎日']||v['起始日'])||today(),label:String(v['備註']||''),len:Number(v['期數上限'])||0});
-      });
+    let ns=0,nd2=0,skip=0,dup=0,why='',seen=[];
+    const got=[];let setSeen=false;
+    for(const name of wb.SheetNames){
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:''});
+      if(!rows.length)continue;
+      const keys=Object.keys(rows[0]).join('|');
+      if(/獎項/.test(keys))continue;
+      const isDraw=/期別|期號|特別號|特號|開獎日/.test(keys.replace(/起始開獎日/g,''));
+      const isSet=/號碼1|號碼_1|^號碼$|\|號碼\||^號碼\|/.test(keys)||/號碼1/.test(keys);
+      if(isDraw){
+        seen.push(name+'(開獎)');
+        rows.forEach((v,idx)=>{
+          const p=String(pick(v,['期別','期號','期數','期'])).trim();
+          let m=numsOf(v,'號碼',['開獎號碼','獎號','號碼']);
+          let sp=Number(pick(v,['特別號','特別號碼','特號']));
+          if(m.length===7&&!sp){sp=m[6];m=m.slice(0,6)}
+          const d=nd(pick(v,['開獎日','開獎日期','日期']));
+          if(!p&&!d&&!m.length)return;
+          if(!p||!d||m.length!==6||m.some(x=>!(x>=1&&x<=49))||!(sp>=1&&sp<=49)||new Set([...m,sp]).size!==7){skip++;if(!why)why='第 '+(idx+2)+' 列（期別='+p+'，日期='+(d||'無法辨識')+'，號碼='+m.join(' ')+'，特別號='+sp+'）';return}
+          const old=draws[p]||{};
+          draws[p]={p,d,m:m.sort((a,b)=>a-b),s:sp,a1:Number(pick(v,['頭獎金額']))||old.a1||0,a2:Number(pick(v,['貳獎金額']))||old.a2||0};nd2++;
+        });
+      }else if(isSet){
+        setSeen=true;seen.push(name+'(號碼組)');
+        rows.forEach((v,idx)=>{
+          const n=numsOf(v,'號碼',['號碼']);
+          if(n.length!==6||new Set(n).size!==6||n.some(x=>!(x>=1&&x<=49))){if(Object.values(v).some(x=>x!=='')){skip++;if(!why)why='第 '+(idx+2)+' 列號碼不是 6 個不重複的 1～49'}return}
+          got.push({id:Date.now()+Math.random(),n:n.sort((a,b)=>a-b),start:nd(pick(v,['起始開獎日','起始日']))||today(),label:String(pick(v,['備註'])||''),len:Number(pick(v,['期數上限']))||0});
+        });
+      }
+    }
+    if(setSeen){
       if($('xmode').value==='replace'){sets=got;ns=got.length}
       else got.forEach(g=>{if(sets.some(x=>x.n.join()===g.n.join()&&x.start===g.start))dup++;else{sets.push(g);ns++}});
       wr('lottoSets',sets);
     }
-    if(dr){
-      dr.forEach(v=>{
-        const m=[1,2,3,4,5,6].map(i=>Number(v['號碼'+i])),sp=Number(v['特別號']),p=String(v['期別']).trim(),d=nd(v['開獎日']);
-        if(!p||!d||m.some(x=>!(x>=1&&x<=49))||!(sp>=1&&sp<=49)||new Set([...m,sp]).size!==7){if(p)skip++;return}
-        const old=draws[p]||{};
-        draws[p]={p,d,m:m.sort((a,b)=>a-b),s:sp,a1:Number(v['頭獎金額'])||old.a1||0,a2:Number(v['貳獎金額'])||old.a2||0};nd2++;
-      });
-      wr('lottoDraws',draws);
-    }
+    wr('lottoDraws',draws);
     render();
-    $('msg').textContent=`匯入完成：號碼組 ${ns} 組、開獎 ${nd2} 期`+(dup?`，略過重複 ${dup} 組`:'')+(skip?`，格式不符略過 ${skip} 列`:'');
+    if(!seen.length){$('msg').textContent='⚠️ 認不出工作表內容：第一列標題需有「期別、開獎日、號碼1～號碼6、特別號」（開獎紀錄）或「號碼1～號碼6」（號碼組）。目前標題：'+(wb.SheetNames.map(n=>{const r=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''});return n+'：'+(r[0]?Object.keys(r[0]).join('、'):'空白')}).join('；'));return}
+    $('msg').textContent=`匯入完成（${seen.join('、')}）：號碼組 ${ns} 組、開獎 ${nd2} 期`+(dup?`，略過重複 ${dup} 組`:'')+(skip?`，略過 ${skip} 列，例如 ${why}`:'');
   }catch(err){$('msg').textContent='⚠️ 無法讀取此檔案：'+err.message}
 };
 $('start').value=today();
