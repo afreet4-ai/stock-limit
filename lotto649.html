@@ -41,7 +41,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 </head>
 <body>
 <main>
-<h1>🎯 大樂透自動對獎</h1>
+<h1>🎯 大樂透自動對獎 <span class="mu">v9</span></h1>
 
 <div class="card">
   <div class="row" style="justify-content:space-between">
@@ -115,6 +115,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 <script>
 const $=id=>document.getElementById(id);
 const PRICE=50;
+const rangeAll=()=>{const a=Object.values(draws).map(d=>d.d).sort();return a.length?a.length+' 期（'+a[0]+' ～ '+a[a.length-1]+'）':'0 期'};
 const cap=s=>s.len>0?s.len:Infinity;
 const spanTxt=(s,e)=>s.len>0?e.k+'/'+s.len+' 期':'累計 '+e.k+' 期';
 const PRIZE={參獎:20000,肆獎:4000,伍獎:800,陸獎:400,柒獎:400,普獎:400};
@@ -212,6 +213,7 @@ function render(){
     <div class="row" style="justify-content:space-between"><div><b>第${i+1}組</b> ${balls(s.n)}</div>
       <span class="tag ${done?'ok':''}">${done?'已完成':'進行中'} ${spanTxt(s,e)}</span></div>
     <div class="mu">${esc(s.label||'')} 購買日 ${s.start}</div>
+    <div class="mu">${e.k?'計入 '+e.rows[0].d.d+' ～ '+e.rows[e.k-1].d.d+'，共 '+e.k+' 期':'尚無已開獎期數'}｜${s.len>0?'期數上限 '+s.len:'不限期數'}</div>
     ${e.before?`<div class="mu" style="color:#f59e0b">另有 ${e.before} 期開獎早於購買日，未計入成本與獎金（這是正常的，買票前的開獎不該算）。</div>`:''}
     <div class="stats"><div><span class="mu">累計成本</span><b>${$$(e.cost)}</b></div>
       <div><span class="mu">累計中獎</span><b class="up">${$$(e.prize)}</b></div>
@@ -229,7 +231,7 @@ function render(){
     +(brk.length?`<tr><td><b>合計</b></td><td class="n"><b>${$$(tc)}</b></td><td class="n up"><b>${$$(tp)}</b></td><td class="n ${tp-tc>=0?'up':'dn'}"><b>${tp-tc<0?'-':''}${$$(Math.abs(tp-tc))}</b></td></tr>`:'<tr><td class="mu" colspan="4">尚未新增號碼</td></tr>');
   const net=tp-tc;
   $('sum').innerHTML=`<div><span class="mu">總成本</span><b>${$$(tc)}</b></div><div><span class="mu">總中獎</span><b class="up">${$$(tp)}</b></div><div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div>`;
-  $('dcnt').textContent='共 '+all.length+' 期開獎紀錄（由新到舊，可捲動）';
+  $('dcnt').textContent='共 '+rangeAll()+'開獎紀錄（由新到舊，可捲動）';
   $('dl').innerHTML='<tr><th>期別</th><th>日期</th><th>號碼</th></tr>'+all.map(d=>`<tr data-p="${d.p}" style="cursor:pointer"><td>${d.p}</td><td>${d.d.slice(5)}</td><td>${d.m.map(pad).join(' ')} +${pad(d.s)}</td></tr>`).join('');
 }
 
@@ -418,7 +420,7 @@ $('xfile').onchange=async e=>{
     wr('lottoDraws',draws);
     render();
     if(!seen.length){$('msg').textContent='⚠️ 認不出工作表內容：第一列標題需有「期別、開獎日、號碼1～號碼6、特別號」（開獎紀錄）或「號碼1～號碼6」（號碼組）。目前標題：'+(wb.SheetNames.map(n=>{const r=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''});return n+'：'+(r[0]?Object.keys(r[0]).join('、'):'空白')}).join('；'));return}
-    $('msg').textContent=`匯入完成（${seen.join('、')}）：號碼組 ${ns} 組、開獎 ${nd2} 期`+(dup?`，略過重複 ${dup} 組`:'')+(nodate?`，${nodate} 組沒有購買日期，已暫設為今天，請按「修改」補上`:'')+(skip?`，略過 ${skip} 列，例如 ${why}`:'');
+    $('msg').textContent=`匯入完成（${seen.join('、')}）開獎紀錄現共 ${rangeAll()}：號碼組 ${ns} 組、開獎 ${nd2} 期`+(dup?`，略過重複 ${dup} 組`:'')+(nodate?`，${nodate} 組沒有購買日期，已暫設為今天，請按「修改」補上`:'')+(skip?`，略過 ${skip} 列，例如 ${why}`:'');
   }catch(err){$('msg').textContent='⚠️ 無法讀取此檔案：'+err.message}
 };
 $('start').value=today();
