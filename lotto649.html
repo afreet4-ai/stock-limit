@@ -65,7 +65,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
   <b>➕ 新增號碼（期數不限，可一直累加）</b>
   <textarea id="nums" rows="4" placeholder="每行一組，6 個號碼（1～49），空格或逗號分隔&#10;例如：03 11 18 25 34 47" style="width:100%;margin-top:8px"></textarea>
   <div class="row" style="margin-top:8px">
-    <span class="mu">起始開獎日</span><input type="date" id="start" style="flex:0 0 160px">
+    <span class="mu">購買日期</span><input type="date" id="start" style="flex:0 0 160px">
     <input id="label" placeholder="備註（選填）">
   </div>
   <div class="row" style="margin-top:8px">
@@ -76,7 +76,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
     <button class="g" id="rnd">電腦選號</button>
     <input id="rn" type="number" min="1" max="50" value="3" style="flex:0 0 64px"><span class="mu">組</span>
   </div>
-  <div class="mu" id="amsg" style="margin-top:6px">起始開獎日＝你買的第一期的開獎日（週二、週五）。</div>
+  <div class="mu" id="amsg" style="margin-top:6px">購買日期＝買票當天；只計入這一天（含）之後的開獎。若買票當天已過開獎截止時間，請填隔天。每組可各自設定不同日期。</div>
 </div>
 
 <div id="sets"></div>
@@ -102,7 +102,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
     </select>
     <input type="file" id="xfile" accept=".xlsx,.xls,.csv" hidden>
   </div>
-  <div class="mu" style="margin-top:6px">Excel 內含「號碼組」「開獎紀錄」「各期明細」三個工作表；匯入讀取前兩個，也可只用一個工作表，欄位為：號碼1～號碼6、起始開獎日、備註、期數上限（空白＝不限）。</div>
+  <div class="mu" style="margin-top:6px">Excel 內含「號碼組」「開獎紀錄」「各期明細」三個工作表；匯入讀取前兩個，也可只用一個工作表，欄位為：號碼1～號碼6、購買日期、備註、期數上限（空白＝不限）。沒有購買日期的號碼組會暫設為今天。</div>
   <div class="row" style="margin-top:10px">
     <button class="g" id="exp">匯出備份(JSON)</button>
     <button class="g" id="imp">匯入備份(JSON)</button>
@@ -211,8 +211,8 @@ function render(){
     return `<div class="card">
     <div class="row" style="justify-content:space-between"><div><b>第${i+1}組</b> ${balls(s.n)}</div>
       <span class="tag ${done?'ok':''}">${done?'已完成':'進行中'} ${spanTxt(s,e)}</span></div>
-    <div class="mu">${esc(s.label||'')} 起始 ${s.start}</div>
-    ${e.before?`<div class="mu" style="color:#f59e0b">另有 ${e.before} 期開獎早於起始日，未計入成本與獎金。要計入請按「修改」，把起始開獎日改早一點。</div>`:''}
+    <div class="mu">${esc(s.label||'')} 購買日 ${s.start}</div>
+    ${e.before?`<div class="mu" style="color:#f59e0b">另有 ${e.before} 期開獎早於購買日，未計入成本與獎金（這是正常的，買票前的開獎不該算）。</div>`:''}
     <div class="stats"><div><span class="mu">累計成本</span><b>${$$(e.cost)}</b></div>
       <div><span class="mu">累計中獎</span><b class="up">${$$(e.prize)}</b></div>
       <div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div></div>
@@ -289,7 +289,7 @@ $('sets').onclick=e=>{
     editIdx=+t.dataset.edit;const x=sets[editIdx];
     $('nums').value=x.n.map(pad).join(' ');$('start').value=x.start;$('label').value=x.label||'';$('len').value=x.len||'';
     $('add').textContent='儲存修改';$('cancel').hidden=false;
-    $('amsg').textContent='修改中：改好號碼、起始日或備註後按「儲存修改」';
+    $('amsg').textContent='修改中：改好號碼、購買日期或備註後按「儲存修改」';
     window.scrollTo(0,0);
   }
   if(t.dataset.renew!==undefined){
@@ -338,7 +338,7 @@ function download(blob,name){const l=document.createElement('a');l.href=URL.crea
 $('xexp').onclick=()=>{
   if(needX())return;
   const H6=[1,2,3,4,5,6].map(i=>'號碼'+i);
-  const A=[['組',...H6,'起始開獎日','備註','期數上限','已開期數','累計成本','累計中獎','淨損益']];
+  const A=[['組',...H6,'購買日期','備註','期數上限','已開期數','累計成本','累計中獎','淨損益']];
   const C=[['組','號碼','期別','開獎日','中幾個','特別號','獎項','金額']];
   sets.forEach((x,i)=>{
     const e=evalSet(x);
@@ -384,7 +384,7 @@ $('xfile').onchange=async e=>{
       if(!rows.length)continue;
       const keys=Object.keys(rows[0]).join('|');
       if(/獎項/.test(keys))continue;
-      const isDraw=/期別|期號|特別號|特號|開獎日/.test(keys.replace(/起始開獎日/g,''));
+      const isDraw=/期別|期號|特別號|特號|開獎日/.test(keys.replace(/起始開獎日|購買日期/g,''));
       const isSet=/號碼1|號碼_1|^號碼$|\|號碼\||^號碼\|/.test(keys)||/號碼1/.test(keys);
       if(isDraw){
         seen.push(name+'(開獎)');
@@ -404,12 +404,12 @@ $('xfile').onchange=async e=>{
         rows.forEach((v,idx)=>{
           const n=numsOf(v,'號碼',['號碼']);
           if(n.length!==6||new Set(n).size!==6||n.some(x=>!(x>=1&&x<=49))){if(Object.values(v).some(x=>x!=='')){skip++;if(!why)why='第 '+(idx+2)+' 列號碼不是 6 個不重複的 1～49'}return}
-          got.push({id:Date.now()+Math.random(),n:n.sort((a,b)=>a-b),start:nd(pick(v,['起始開獎日','起始日'])),label:String(pick(v,['備註'])||''),len:Number(pick(v,['期數上限']))||0});
+          got.push({id:Date.now()+Math.random(),n:n.sort((a,b)=>a-b),start:nd(pick(v,['購買日期','購買日','購買時間','起始開獎日','起始日'])),label:String(pick(v,['備註'])||''),len:Number(pick(v,['期數上限']))||0});
         });
       }
     }
-    const earliest=Object.values(draws).map(d=>d.d).sort()[0]||today();
-    got.forEach(g=>{if(!g.start)g.start=earliest});
+    let nodate=0;
+    got.forEach(g=>{if(!g.start){g.start=today();nodate++}});
     if(setSeen){
       if($('xmode').value==='replace'){sets=got;ns=got.length}
       else got.forEach(g=>{if(sets.some(x=>x.n.join()===g.n.join()&&x.start===g.start))dup++;else{sets.push(g);ns++}});
@@ -418,7 +418,7 @@ $('xfile').onchange=async e=>{
     wr('lottoDraws',draws);
     render();
     if(!seen.length){$('msg').textContent='⚠️ 認不出工作表內容：第一列標題需有「期別、開獎日、號碼1～號碼6、特別號」（開獎紀錄）或「號碼1～號碼6」（號碼組）。目前標題：'+(wb.SheetNames.map(n=>{const r=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:''});return n+'：'+(r[0]?Object.keys(r[0]).join('、'):'空白')}).join('；'));return}
-    $('msg').textContent=`匯入完成（${seen.join('、')}）：號碼組 ${ns} 組、開獎 ${nd2} 期`+(dup?`，略過重複 ${dup} 組`:'')+(skip?`，略過 ${skip} 列，例如 ${why}`:'');
+    $('msg').textContent=`匯入完成（${seen.join('、')}）：號碼組 ${ns} 組、開獎 ${nd2} 期`+(dup?`，略過重複 ${dup} 組`:'')+(nodate?`，${nodate} 組沒有購買日期，已暫設為今天，請按「修改」補上`:'')+(skip?`，略過 ${skip} 列，例如 ${why}`:'');
   }catch(err){$('msg').textContent='⚠️ 無法讀取此檔案：'+err.message}
 };
 $('start').value=today();
