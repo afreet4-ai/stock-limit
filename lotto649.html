@@ -83,7 +83,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 
 <details class="card" id="mbox">
   <summary>開獎紀錄與手動輸入</summary>
-  <table id="dl" style="margin-top:8px"></table>
+  <div class="mu" id="dcnt" style="margin-top:8px"></div><div style="max-height:320px;overflow:auto"><table id="dl"></table></div>
   <p class="mu">頭獎、貳獎金額每期不同，請點上方列表的該期帶入表單，再填金額。</p>
   <div class="row"><input id="mp" placeholder="期別"><input type="date" id="md"></div>
   <div class="row" style="margin-top:6px"><input id="mm" placeholder="6 個號碼"><input id="ms" placeholder="特別號" style="flex:0 0 80px"></div>
@@ -139,7 +139,7 @@ function evalSet(s){
     const h=s.n.filter(x=>d.m.includes(x)).length,sp=s.n.includes(d.s),t=tier(h,sp);
     return{d,h,sp,t,amt:amount(t,d),pend:(t==='頭獎'&&!d.a1)||(t==='貳獎'&&!d.a2)};
   });
-  return{rows,k:rows.length,cost:rows.length*PRICE,prize:rows.reduce((a,r)=>a+r.amt,0)};
+  return{rows,before:Object.values(draws).filter(d=>d.d<s.start).length,k:rows.length,cost:rows.length*PRICE,prize:rows.reduce((a,r)=>a+r.amt,0)};
 }
 
 // ---- data fetch ----
@@ -212,6 +212,7 @@ function render(){
     <div class="row" style="justify-content:space-between"><div><b>第${i+1}組</b> ${balls(s.n)}</div>
       <span class="tag ${done?'ok':''}">${done?'已完成':'進行中'} ${spanTxt(s,e)}</span></div>
     <div class="mu">${esc(s.label||'')} 起始 ${s.start}</div>
+    ${e.before?`<div class="mu" style="color:#f59e0b">另有 ${e.before} 期開獎早於起始日，未計入成本與獎金。要計入請按「修改」，把起始開獎日改早一點。</div>`:''}
     <div class="stats"><div><span class="mu">累計成本</span><b>${$$(e.cost)}</b></div>
       <div><span class="mu">累計中獎</span><b class="up">${$$(e.prize)}</b></div>
       <div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div></div>
@@ -228,7 +229,8 @@ function render(){
     +(brk.length?`<tr><td><b>合計</b></td><td class="n"><b>${$$(tc)}</b></td><td class="n up"><b>${$$(tp)}</b></td><td class="n ${tp-tc>=0?'up':'dn'}"><b>${tp-tc<0?'-':''}${$$(Math.abs(tp-tc))}</b></td></tr>`:'<tr><td class="mu" colspan="4">尚未新增號碼</td></tr>');
   const net=tp-tc;
   $('sum').innerHTML=`<div><span class="mu">總成本</span><b>${$$(tc)}</b></div><div><span class="mu">總中獎</span><b class="up">${$$(tp)}</b></div><div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div>`;
-  $('dl').innerHTML='<tr><th>期別</th><th>日期</th><th>號碼</th></tr>'+all.slice(0,10).map(d=>`<tr data-p="${d.p}" style="cursor:pointer"><td>${d.p}</td><td>${d.d.slice(5)}</td><td>${d.m.map(pad).join(' ')} +${pad(d.s)}</td></tr>`).join('');
+  $('dcnt').textContent='共 '+all.length+' 期開獎紀錄（由新到舊，可捲動）';
+  $('dl').innerHTML='<tr><th>期別</th><th>日期</th><th>號碼</th></tr>'+all.map(d=>`<tr data-p="${d.p}" style="cursor:pointer"><td>${d.p}</td><td>${d.d.slice(5)}</td><td>${d.m.map(pad).join(' ')} +${pad(d.s)}</td></tr>`).join('');
 }
 
 // ---- actions ----
@@ -402,10 +404,12 @@ $('xfile').onchange=async e=>{
         rows.forEach((v,idx)=>{
           const n=numsOf(v,'號碼',['號碼']);
           if(n.length!==6||new Set(n).size!==6||n.some(x=>!(x>=1&&x<=49))){if(Object.values(v).some(x=>x!=='')){skip++;if(!why)why='第 '+(idx+2)+' 列號碼不是 6 個不重複的 1～49'}return}
-          got.push({id:Date.now()+Math.random(),n:n.sort((a,b)=>a-b),start:nd(pick(v,['起始開獎日','起始日']))||today(),label:String(pick(v,['備註'])||''),len:Number(pick(v,['期數上限']))||0});
+          got.push({id:Date.now()+Math.random(),n:n.sort((a,b)=>a-b),start:nd(pick(v,['起始開獎日','起始日'])),label:String(pick(v,['備註'])||''),len:Number(pick(v,['期數上限']))||0});
         });
       }
     }
+    const earliest=Object.values(draws).map(d=>d.d).sort()[0]||today();
+    got.forEach(g=>{if(!g.start)g.start=earliest});
     if(setSeen){
       if($('xmode').value==='replace'){sets=got;ns=got.length}
       else got.forEach(g=>{if(sets.some(x=>x.n.join()===g.n.join()&&x.start===g.start))dup++;else{sets.push(g);ns++}});
