@@ -41,7 +41,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 </head>
 <body>
 <main>
-<h1>🎯 大樂透自動對獎 <span class="mu">v13</span></h1>
+<h1>🎯 大樂透自動對獎 <span class="mu">v14</span></h1>
 
 <div class="card">
   <div class="row" style="justify-content:space-between">
@@ -86,6 +86,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
   <div class="mu" id="amsg" style="margin-top:6px">同一期同號碼買多注，請填「注數」；不同號碼請各自一組。購買日期＝買票當天；只計入這一天（含）之後的開獎。若買票當天已過開獎截止時間，請填隔天。每組可各自設定不同日期。</div>
 </div>
 
+<div class="row" style="margin-bottom:12px"><button class="g" id="renewall" hidden>全部到期組別續買</button></div>
 <div id="sets"></div>
 
 <details class="card" id="mbox">
@@ -224,11 +225,13 @@ function balls(arr,hit,sp){return arr.map(x=>`<span class="ball ${hit&&hit.inclu
 function render(){
   const all=Object.values(draws).sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:(a.p<b.p?1:-1));
   $('latest').innerHTML=all.length?`最新 ${all[0].p} 期（${all[0].d.slice(5)}）<div>${balls(all[0].m)}<span class="ball sp">${pad(all[0].s)}</span></div>`:'尚無開獎資料';
-  let tc=0,tp=0;const brk=[],wins=[];
+  let tc=0,tp=0,part=0,expired=0;const brk=[],wins=[];const latestD=all.length?all[0].d:'';
   $('sets').innerHTML=sets.map((s,i)=>{
     const e=evalSet(s);tc+=e.cost;tp+=e.prize;
     const net=e.prize-e.cost,done=(s.len>0&&e.k>=s.len)||!!(s.end&&today()>s.end);
     e.rows.forEach(r=>{if(r.t)wins.push({i,s,r})});
+    if(e.rows.some(r=>r.d.d===latestD))part++;
+    if(done)expired++;
     let cum=0;e.rows.forEach(r=>{cum+=r.amt;r.cum=cum});
     brk.push({i,s,e,net});
     return `<div class="card">
@@ -248,16 +251,24 @@ function render(){
       <td>${r.t?'<b class="up">'+r.t+'</b>':'<span class="mu">未中</span>'}<div class="mu">中${r.h}${r.sp?'+特':''}</div></td>
       <td class="n">${r.t?(r.pend?'待填':$$(r.amt)):''}<div class="mu">累計 ${$$(r.cum)}</div></td></tr>`).join('')||'<tr><td colspan="4" class="mu">尚無已開獎期數</td></tr>'}
     </table></details>
-    <div class="row" style="margin-top:8px">${done?`<button class="g" data-renew="${i}">續買${s.len>0?' '+s.len+' 期':'下一輪'}</button>`:''}<button class="g" data-edit="${i}">修改</button><button class="r" data-del="${i}">刪除</button></div></div>`;
+    <div class="row" style="margin-top:8px">${done||s.end?`<button class="g" data-renew="${i}">續買${s.len>0?' '+s.len+' 期':'下一輪'}</button>`:''}<button class="g" data-edit="${i}">修改</button><button class="r" data-del="${i}">刪除</button></div></div>`;
   }).join('')||'<div class="card mu">尚未新增號碼</div>';
   $('brk').innerHTML='<tr><th>組</th><th class="n">成本</th><th class="n">中獎</th><th class="n">淨損益</th></tr>'+
     brk.map(b=>`<tr><td><b>${b.i+1}</b> <span class="mu">${b.s.n.map(pad).join(' ')}</span><div class="mu">${spanTxt(b.s,b.e)}${b.s.label?'｜'+esc(b.s.label):''}</div></td><td class="n">${$$(b.e.cost)}</td><td class="n up">${$$(b.e.prize)}</td><td class="n ${b.net>=0?'up':'dn'}">${b.net<0?'-':''}${$$(Math.abs(b.net))}</td></tr>`).join('')
     +(brk.length?`<tr><td><b>合計</b></td><td class="n"><b>${$$(tc)}</b></td><td class="n up"><b>${$$(tp)}</b></td><td class="n ${tp-tc>=0?'up':'dn'}"><b>${tp-tc<0?'-':''}${$$(Math.abs(tp-tc))}</b></td></tr>`:'<tr><td class="mu" colspan="4">尚未新增號碼</td></tr>');
+  $('renewall').hidden=!expired;
   wins.sort((a,b)=>a.r.d.d<b.r.d.d?1:-1);
-  const wsets=new Set(wins.map(w=>w.i)).size,wsum=wins.reduce((a,w)=>a+w.r.amt,0);
-  $('wins').innerHTML=wins.length?`<b>🎉 中獎組數：${wsets} 組（共 ${wins.length} 次，合計 <span class="up">${$$(wsum)}</span>）</b>`+
-    '<div style="margin-top:6px">'+wins.slice(0,30).map(w=>`<div style="padding:6px 0;border-top:1px solid var(--bd)"><b>🎊 第${w.i+1}組</b> ${w.s.n.map(pad).join(' ')}<div>${w.r.d.d}（${w.r.d.p.length>6?w.r.d.p.slice(-3):'第'+w.r.d.p}期）恭喜中 <b class="up">${w.r.t}</b>（中${w.r.h}${w.r.sp?'＋特別號':''}），獎金 <b class="up">${w.r.pend?'待填':$$(w.r.amt)}</b>${w.s.qty>1?'（'+w.s.qty+' 注）':''}</div></div>`).join('')+(wins.length>30?'<div class="mu">僅顯示最近 30 次</div>':'')+'</div>'
-    :'<b>🎉 中獎組數：0 組</b><div class="mu">目前尚無中獎。</div>';
+  const pl=d=>d.p.length>6?'第 '+d.p.slice(-3)+' 期':'第 '+d.p+' 期';
+  const wl=w=>`<div style="padding:6px 0;border-top:1px solid var(--bd)"><b>🎊 第${w.i+1}組</b> ${w.s.n.map(pad).join(' ')}<div>${w.r.d.d}（${pl(w.r.d)}）中 <b class="up">${w.r.t}</b>（中${w.r.h}${w.r.sp?'＋特別號':''}），獎金 <b class="up">${w.r.pend?'待填':$$(w.r.amt)}</b>${w.s.qty>1?'（'+w.s.qty+' 注）':''}</div></div>`;
+  if(!all.length){$('wins').innerHTML='<b>🎉 中獎組數</b><div class="mu">尚無開獎資料。</div>'}
+  else{
+    const cur=wins.filter(w=>w.r.d.d===latestD),old=wins.filter(w=>w.r.d.d!==latestD);
+    const cs=cur.reduce((a,w)=>a+w.r.amt,0),os=old.reduce((a,w)=>a+w.r.amt,0);
+    $('wins').innerHTML=`<b>🎉 中獎組數｜最新一期 ${all[0].d}（${pl(all[0])}）</b>`+
+      (cur.length?`<div style="margin-top:4px"><b class="up">${new Set(cur.map(w=>w.i)).size} 組中獎</b>（共 ${cur.length} 筆），本期獎金合計 <b class="up">${$$(cs)}</b>${cur.some(w=>w.r.pend)?'（含待填，尚未計入）':''}</div>`+cur.map(wl).join('')
+        :`<div class="mu" style="margin-top:4px">本期共 ${part} 組參與對獎，沒有中獎。</div>`)+
+      (old.length?`<details><summary>歷史中獎 ${old.length} 筆，合計 ${$$(os)}</summary>${old.slice(0,50).map(wl).join('')}${old.length>50?'<div class="mu">僅顯示最近 50 筆</div>':''}</details>`:'');
+  }
   const net=tp-tc;
   $('sum').innerHTML=`<div><span class="mu">總成本</span><b>${$$(tc)}</b></div><div><span class="mu">總中獎</span><b class="up">${$$(tp)}</b></div><div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div>`;
   $('dcnt').textContent='共 '+rangeAll()+'開獎紀錄（由新到舊，可捲動）';
@@ -265,6 +276,14 @@ function render(){
 }
 
 // ---- actions ----
+function renewSet(i){
+  const s=sets[i],e2=evalSet(s);let ns,ne='';
+  if(s.end){const n=schedCount(s.start,s.end);ns=addDays(s.end,1);ne=endForCount(ns,n)}
+  else{const last=e2.rows.length?e2.rows[e2.rows.length-1].d.d:today();ns=addDays(last,1)}
+  if(sets.some(x=>x.n.join()===s.n.join()&&x.start===ns))return false;
+  sets.push({id:Date.now()+Math.random(),n:s.n,start:ns,end:ne,label:s.label,len:s.len,qty:s.qty});
+  return true;
+}
 let pend=null;
 function ask(btn,fn){
   if(pend&&pend.btn===btn){clearTimeout(pend.t);pend=null;fn();return}
@@ -282,6 +301,14 @@ function parseLines(t){
 }
 let editIdx=-1;
 function endEdit(){editIdx=-1;$('add').textContent='加入';$('cancel').hidden=true;$('nums').value='';$('label').value='';$('len').value='';$('qty').value='';$('end').value='';$('start').value=today()}
+$('renewall').onclick=()=>ask($('renewall'),()=>{
+  let c=0;const n=sets.length;
+  for(let i=0;i<n;i++){const x=sets[i],e=evalSet(x);
+    const done=(x.len>0&&e.k>=x.len)||!!(x.end&&today()>x.end);
+    if(done&&renewSet(i))c++}
+  wr('lottoSets',sets);render();
+  $('msg').textContent=c?'已續買 '+c+' 組（相同號碼、相同期數與注數，接在原本結束之後）':'沒有需要續買的組別';
+});
 $('end10').onclick=()=>{$('end').value=endForCount($('start').value||today(),10)};
 $('cancel').onclick=()=>{endEdit();$('amsg').textContent='已取消修改'};
 $('add').onclick=()=>{
@@ -326,12 +353,11 @@ $('sets').onclick=e=>{
     window.scrollTo(0,0);
   }
   if(t.dataset.renew!==undefined){
-    const s=sets[+t.dataset.renew],e2=evalSet(s);let ns,ne='';
-    if(s.end){const n=schedCount(s.start,s.end);ns=addDays(s.end,1);ne=endForCount(ns,n)}
-    else{const last=e2.rows.length?e2.rows[e2.rows.length-1].d.d:today();ns=addDays(last,1)}
-    sets.push({id:Date.now(),n:s.n,start:ns,end:ne,label:s.label,len:s.len,qty:s.qty});
+    const ok=renewSet(+t.dataset.renew);
     wr('lottoSets',sets);render();
+    $('msg').textContent=ok?'已續買：新增一組相同號碼，接在原本迄日之後':'這組已經有續買紀錄了';
   }
+
 };
 $('dl').onclick=e=>{
   const tr=e.target.closest('tr[data-p]');if(!tr)return;
