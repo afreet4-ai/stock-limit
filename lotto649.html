@@ -41,7 +41,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 </head>
 <body>
 <main>
-<h1>🎯 大樂透自動對獎 <span class="mu">v15</span></h1>
+<h1>🎯 大樂透自動對獎 <span class="mu">v16</span></h1>
 
 <div class="card">
   <div class="row" style="justify-content:space-between">
@@ -251,7 +251,7 @@ function render(){
       <div><span class="mu">累計中獎</span><b class="up">${$$(e.prize)}</b></div>
       <div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div></div>
     <details><summary>各期明細</summary><table><tr><th>期別</th><th>開獎</th><th>結果</th><th class="n">金額</th></tr>
-    ${e.rows.map(r=>`<tr><td>${r.d.p.slice(-3)}<div class="mu">${r.d.d.slice(5)}</div><button class="g sm" data-ed="${r.d.d}">改</button><button class="r sm" data-dd="${r.d.d}">刪</button></td>
+    ${e.rows.slice().reverse().map(r=>`<tr><td>${r.d.p.slice(-3)}<div class="mu">${r.d.d.slice(5)}</div><button class="g sm" data-ed="${r.d.d}">改</button><button class="r sm" data-dd="${r.d.d}">刪</button></td>
       <td>${balls(r.d.m,s.n,0).replace(/ball /g,'ball ')}<span class="ball sp">${pad(r.d.s)}</span></td>
       <td>${r.t?'<b class="up">'+r.t+'</b>':'<span class="mu">未中</span>'}<div class="mu">中${r.h}${r.sp?'+特':''}</div></td>
       <td class="n">${r.t?(r.pend?'待填':$$(r.amt)):''}<div class="mu">累計 ${$$(r.cum)}</div></td></tr>`).join('')||'<tr><td colspan="4" class="mu">尚無已開獎期數</td></tr>'}
