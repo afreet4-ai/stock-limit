@@ -41,7 +41,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 </head>
 <body>
 <main>
-<h1>🎯 大樂透自動對獎 <span class="mu">v17</span></h1>
+<h1>🎯 大樂透自動對獎 <span class="mu">v18</span></h1>
 
 <div class="card">
   <div class="row" style="justify-content:space-between">
@@ -133,6 +133,17 @@ const rangeAll=()=>{const a=Object.values(draws).map(d=>d.d).sort();return a.len
 const addDays=(ds,n)=>{const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return d.toLocaleDateString('sv')};
 function schedCount(a,b){let c=0,d=new Date(a+'T00:00:00');const e=new Date(b+'T00:00:00');for(let i=0;d<=e&&i<4000;i++){const w=d.getDay();if(w===2||w===5)c++;d.setDate(d.getDate()+1)}return c}
 function endForCount(a,n){let c=0,d=new Date(a+'T00:00:00');for(let i=0;i<4000;i++){const w=d.getDay();if(w===2||w===5){c++;if(c===n)return d.toLocaleDateString('sv')}d.setDate(d.getDate()+1)}return a}
+function lastInfo(s,e){
+  if(!(s.len>0))return null;
+  if(e.k>=s.len)return{d:e.rows[s.len-1].d.d,est:false,left:0};
+  const base=e.k?addDays(e.rows[e.k-1].d.d,1):s.start;
+  return{d:endForCount(base,s.len-e.k),est:true,left:s.len-e.k};
+}
+function lastLine(s,e){
+  const l=lastInfo(s,e);if(!l)return '';
+  return `<div class="mu">最後一期（第 ${s.len} 期）開獎日：<b>${l.d}</b>${l.est?'（預估，依週二、週五推算；尚餘 '+l.left+' 期）':'（已開獎）'}</div>`;
+}
+const lastShort=(s,e)=>{const l=lastInfo(s,e);return l?'｜最後一期 '+l.d.slice(5)+(l.est?'(預估)':''):''};
 const cap=s=>s.len>0?s.len:Infinity;
 const spanTxt=(s,e)=>s.len>0?e.k+'/'+s.len+' 期':'累計 '+e.k+' 期';
 const PRIZE={伍獎:2000,陸獎:1000,柒獎:400,普獎:400};
@@ -246,6 +257,7 @@ function render(){
     <div class="mu">${esc(s.label||'')} 購買日 ${s.start}</div>
     <div class="mu">${e.k?'計入 '+e.rows[0].d.d+' ～ '+e.rows[e.k-1].d.d+'，共 '+e.k+' 期':'尚無已開獎期數'}｜${s.len>0?'期數上限 '+s.len:'不限期數'}${s.qty>1?'｜<b>'+s.qty+' 注</b>（成本與獎金×'+s.qty+'）':''}</div>
     ${s.end?(()=>{const n=schedCount(s.start,s.end);return `<div class="mu">購買期間 ${s.start} ～ ${s.end}｜預估共 ${n} 期（以週二、週五推算）｜已開 ${e.k} 期${today()>s.end?'（已到期）':'，尚餘約 '+Math.max(0,n-e.k)+' 期'}</div>`})():''}
+    ${lastLine(s,e)}
     ${e.before?`<div class="mu" style="color:#f59e0b">另有 ${e.before} 期開獎早於購買日，未計入成本與獎金（這是正常的，買票前的開獎不該算）。</div>`:''}
     ${e.rows.some(r=>r.pend)?`<div class="mu" style="color:#f59e0b">有 ${e.rows.filter(r=>r.pend).length} 期中了浮動獎金但金額待填（${e.rows.filter(r=>r.pend).map(r=>r.d.d.slice(5)+r.t).join('、')}），累計中獎金額暫未含這些。請到各期明細按「改」補上金額。</div>`:''}
     <div class="stats"><div><span class="mu">累計成本</span><b>${$$(e.cost)}</b></div>
@@ -260,7 +272,7 @@ function render(){
     <div class="row" style="margin-top:8px"><button class="g" data-edit="${i}">修改</button><button class="r" data-del="${i}">刪除</button></div></div>`;
   }).join('')||'<div class="card mu">尚未新增號碼</div>';
   $('brk').innerHTML='<tr><th>組</th><th class="n">成本</th><th class="n">中獎</th><th class="n">淨損益</th></tr>'+
-    brk.map(b=>`<tr><td><b>${b.i+1}</b> <span class="mu">${b.s.n.map(pad).join(' ')}</span><div class="mu">${spanTxt(b.s,b.e)}${b.s.label?'｜'+esc(b.s.label):''}</div></td><td class="n">${$$(b.e.cost)}</td><td class="n up">${$$(b.e.prize)}</td><td class="n ${b.net>=0?'up':'dn'}">${b.net<0?'-':''}${$$(Math.abs(b.net))}</td></tr>`).join('')
+    brk.map(b=>`<tr><td><b>${b.i+1}</b> <span class="mu">${b.s.n.map(pad).join(' ')}</span><div class="mu">${spanTxt(b.s,b.e)}${lastShort(b.s,b.e)}${b.s.label?'｜'+esc(b.s.label):''}</div></td><td class="n">${$$(b.e.cost)}</td><td class="n up">${$$(b.e.prize)}</td><td class="n ${b.net>=0?'up':'dn'}">${b.net<0?'-':''}${$$(Math.abs(b.net))}</td></tr>`).join('')
     +(brk.length?`<tr><td><b>合計</b></td><td class="n"><b>${$$(tc)}</b></td><td class="n up"><b>${$$(tp)}</b></td><td class="n ${tp-tc>=0?'up':'dn'}"><b>${tp-tc<0?'-':''}${$$(Math.abs(tp-tc))}</b></td></tr>`:'<tr><td class="mu" colspan="4">尚未新增號碼</td></tr>');
   $('renewbar').hidden=!sets.length;updSel();
   wins.sort((a,b)=>a.r.d.d<b.r.d.d?1:-1);
