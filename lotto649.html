@@ -41,7 +41,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 </head>
 <body>
 <main>
-<h1>🎯 大樂透自動對獎 <span class="mu">v16</span></h1>
+<h1>🎯 大樂透自動對獎 <span class="mu">v17</span></h1>
 
 <div class="card">
   <div class="row" style="justify-content:space-between">
@@ -88,7 +88,8 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 
 <div class="card" id="renewbar" hidden>
   <div class="row"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="selall" style="flex:none;padding:0;width:22px;height:22px"> 全選</label><button class="g" id="selexp" type="button">選取已到期</button><span class="mu" id="selcnt">已勾選 0 組</span></div>
-  <div class="row" style="margin-top:8px"><span class="mu">續買</span><input id="rn2" type="number" min="1" value="10" style="flex:0 0 70px"><span class="mu">期</span><button id="renew" type="button">續買勾選的組別</button></div>
+  <div class="row" style="margin-top:8px"><span class="mu">期數</span><input id="rn2" type="number" min="1" value="10" style="flex:0 0 70px"><span class="mu">期</span></div>
+  <div class="row" style="margin-top:8px"><button id="renew" type="button">續買（再延長此期數）</button><button class="g" id="setn" type="button">設為總共買此期數</button></div>
   <div class="mu" style="margin-top:6px">續買＝直接延長該組的期間，成本與中獎金額繼續累計在同一組，不另開新組。</div>
 </div>
 <div id="sets"></div>
@@ -313,6 +314,16 @@ $('renew').onclick=()=>{
   });
   sel.clear();wr('lottoSets',sets);render();
   $('msg').textContent='已續買 '+c+' 組，各延長 '+n+' 期，成本與中獎金額累計在同一組'+(skip?'；'+skip+' 組本來就不限期數，無需續買':'');
+};
+$('setn').onclick=()=>{
+  const n=Math.max(1,parseInt($('rn2').value)||10);
+  const picked=sets.filter(x=>sel.has(String(x.id)));
+  if(!picked.length){$('msg').textContent='⚠️ 請先勾選要設定的組別';return}
+  ask($('setn'),()=>{
+    picked.forEach(x=>{x.len=n;x.end=''});
+    sel.clear();wr('lottoSets',sets);render();
+    $('msg').textContent='已將 '+picked.length+' 組設為從購買日起總共買 '+n+' 期（原本的迄日與期數上限已被取代）';
+  });
 };
 $('selall').onchange=()=>{sel=new Set($('selall').checked?sets.map(x=>String(x.id)):[]);render()};
 $('selexp').onclick=()=>{sel=new Set(expiredIds);render();$('msg').textContent='已勾選 '+sel.size+' 組已到期的組別'};
