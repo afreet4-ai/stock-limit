@@ -1,0 +1,3492 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>藥品品項表管理系統</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --bg: #F5F7F8;
+    --panel: #FFFFFF;
+    --ink: #17262A;
+    --ink-soft: #5B6B6E;
+    --line: #DDE4E3;
+    --teal: #0F6E63;
+    --teal-deep: #0A4A42;
+    --teal-tint: #E4F1EE;
+    --new: #DDF3E4;
+    --new-ink: #1E7A43;
+    --new-border: #8FD6A8;
+    --edit: #FDEED2;
+    --edit-ink: #9A6400;
+    --edit-border: #F3C766;
+    --danger: #FBE3E1;
+    --danger-ink: #B3382C;
+    --mono: 'JetBrains Mono', monospace;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    font-family:'Noto Sans TC', sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{ display:flex; min-height:100vh; }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{
+    width:200px;
+    flex-shrink:0;
+    background: linear-gradient(180deg, var(--teal-deep), var(--teal));
+    color:#EAF5F2;
+    padding:22px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .brand{
+    font-weight:900;
+    font-size:15px;
+    letter-spacing:0.5px;
+    margin: 0 6px 4px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .brand .dot{ width:9px;height:9px;border-radius:50%;background:#7FE0C2; box-shadow:0 0 0 3px rgba(127,224,194,0.25); }
+  .brand-sub{
+    font-size:10.5px; color:#B9DAD2; margin:0 6px 18px; letter-spacing:1px;
+  }
+  .cat-btn{
+    text-align:left;
+    background:transparent;
+    border:none;
+    color:#D6ECE7;
+    font-family:inherit;
+    font-size:13.5px;
+    font-weight:500;
+    padding:10px 10px;
+    border-radius:8px;
+    cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center;
+    transition: background .15s ease, color .15s ease;
+  }
+  .cat-btn:hover{ background:rgba(255,255,255,0.08); color:#fff; }
+  .cat-btn.active{ background:#fff; color:var(--teal-deep); font-weight:700; }
+  .cat-btn .cnt{
+    font-family:var(--mono);
+    font-size:11px;
+    opacity:0.75;
+  }
+  .cat-btn.active .cnt{ opacity:0.55; }
+  .sidebar-actions{ margin-top:14px; display:flex; flex-direction:column; gap:6px; }
+  .side-action-btn{
+    text-align:left; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.18);
+    color:#EAF5F2; font-family:inherit; font-size:12.5px; font-weight:600; padding:9px 10px;
+    border-radius:8px; cursor:pointer; transition: background .15s ease;
+  }
+  .side-action-btn:hover{ background:rgba(255,255,255,0.18); }
+  .sidebar-foot{
+    margin-top:auto;
+    font-size:10.5px;
+    color:#A9CFC7;
+    padding: 10px 6px 0;
+    border-top:1px solid rgba(255,255,255,0.15);
+  }
+  .storage-warning{
+    background:#FBE3E1; color:#8A241A; border-bottom:2px solid #E8A69F;
+    padding:10px 32px; font-size:13px; font-weight:700; line-height:1.5;
+  }
+  .reconnect-banner{
+    background:#E4F1EE; color:#0A4A42; border-bottom:2px solid #8FD6A8;
+    padding:10px 32px; font-size:13px; font-weight:700; line-height:1.5;
+    display:flex; align-items:center; flex-wrap:wrap; gap:4px;
+  }
+  .backup-reminder-banner{
+    background:#FFFBF2; color:#7A5300; border-bottom:2px solid #F3C766;
+    padding:10px 32px; font-size:13px; font-weight:700; line-height:1.5;
+    display:flex; align-items:center; flex-wrap:wrap; gap:4px;
+  }
+
+  /* ---------- Main ---------- */
+  .main{ flex:1; padding:26px 32px 60px; max-width:1240px; }
+  .topbar{ display:flex; justify-content:space-between; align-items:flex-end; gap:16px; margin-bottom:18px; flex-wrap:wrap;}
+  .topbar h1{ font-size:22px; margin:0 0 4px; font-weight:900; }
+  .topbar .meta{ font-size:12.5px; color:var(--ink-soft); }
+  .topbar .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+  button{ font-family:inherit; cursor:pointer; }
+  .btn{
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--ink);
+    padding:9px 16px;
+    border-radius:8px;
+    font-size:13px;
+    font-weight:600;
+    transition: transform .1s ease, box-shadow .1s ease;
+  }
+  .btn:hover{ box-shadow: 0 2px 8px rgba(15,110,99,0.12); transform: translateY(-1px); }
+  .btn.primary{ background:var(--teal); border-color:var(--teal); color:#fff; }
+  .btn.primary:hover{ box-shadow:0 4px 12px rgba(15,110,99,0.28); }
+  .btn.ghost{ background:transparent; }
+  .btn.small{ padding:6px 11px; font-size:12px; }
+  .btn.warn-outline{ border-color:var(--edit-border); color:var(--edit-ink); background:#FFFBF2; }
+  .btn:disabled{ opacity:0.4; cursor:not-allowed; }
+
+  /* stat strip */
+  .stats{
+    display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap;
+  }
+  .stat-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:10px 16px; min-width:96px;
+  }
+  .stat-card .num{ font-family:var(--mono); font-size:20px; font-weight:700; color:var(--teal-deep); }
+  .stat-card .lbl{ font-size:11px; color:var(--ink-soft); margin-top:2px; }
+
+  /* toolbar */
+  .toolbar{
+    display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap;
+  }
+  .search{
+    flex:1; min-width:180px;
+    display:flex; align-items:center; gap:8px;
+    background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px 12px;
+  }
+  .search input{
+    border:none; outline:none; font-family:inherit; font-size:13px; width:100%; background:transparent;
+  }
+  .legend{ display:flex; gap:14px; font-size:11.5px; color:var(--ink-soft); align-items:center; }
+  .legend span{ display:flex; align-items:center; gap:5px; }
+  .swatch{ width:11px;height:11px;border-radius:3px; display:inline-block; }
+  .swatch.new{ background:var(--new); border:1px solid var(--new-border); }
+  .swatch.edit{ background:var(--edit); border:1px solid var(--edit-border); }
+
+  /* table */
+  .table-wrap{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden;
+  }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  thead th{
+    text-align:left; font-size:11.5px; color:var(--ink-soft); font-weight:700;
+    padding:11px 14px; border-bottom:1px solid var(--line); background:#FAFBFB;
+    cursor:pointer; user-select:none; white-space:nowrap;
+  }
+  thead th:hover{ color:var(--teal-deep); }
+  thead th .arrow{ font-size:10px; margin-left:3px; opacity:0.6;}
+  tbody tr{ border-bottom:1px solid #EEF1F1; transition: background .5s ease; }
+  tbody tr:last-child{ border-bottom:none; }
+  tbody td{ padding:10px 14px; vertical-align:middle; }
+  tbody tr.is-new{ background:var(--new); }
+  tbody tr.is-edited{ background:var(--edit); }
+  tbody tr:hover:not(.is-new):not(.is-edited){ background:#F5FAF9; }
+  tbody tr.group-row{ background:var(--teal-tint) !important; }
+  tbody tr.group-row td{
+    padding:8px 14px; font-weight:800; font-size:12px; color:var(--teal-deep);
+    letter-spacing:0.5px;
+  }
+  tbody tr.level-row td{
+    padding:8px 14px; font-weight:900; font-size:12px; color:#fff;
+    background:var(--teal-deep) !important; letter-spacing:1px;
+  }
+  tbody tr.subgroup-row{ background:#F0F3F2 !important; }
+  tbody tr.subgroup-row td{
+    padding:8px 14px 8px 26px; font-weight:700; font-size:12px; color:var(--ink-soft);
+    letter-spacing:0.5px;
+  }
+  .station-merged{ font-size:12px; color:var(--ink-soft); }
+  .seq{ font-family:var(--mono); color:var(--ink-soft); font-size:12px; width:36px; }
+  .code{ font-family:var(--mono); font-weight:700; color:var(--teal-deep); letter-spacing:0.3px; }
+  .name{ font-weight:600; }
+  .station{ font-family:var(--mono); font-size:12px; color:var(--ink-soft); }
+  .tag{
+    display:inline-block; font-size:11px; padding:2px 8px; border-radius:20px; font-weight:600;
+    background:var(--teal-tint); color:var(--teal-deep);
+  }
+  .tag.urgent{ background:#FDE7DA; color:#B45A16; }
+  .tag.sub{ background:#EDEBFB; color:#5B4BB8; }
+  .tag.discontinued{ background:#F0F0F0; color:#8A8A8A; }
+  .tag.free{ background:#DCEFFB; color:#1D6FA5; }
+  .badge-mark{
+    font-size:10px; font-weight:700; padding:1px 6px; border-radius:5px; margin-left:6px;
+  }
+  .badge-mark.new{ background:var(--new-ink); color:#fff; }
+  .badge-mark.edit{ background:var(--edit-ink); color:#fff; }
+  .badge-mark.del{ background:var(--danger-ink); color:#fff; }
+  .stats-table{ width:100%; border-collapse:collapse; font-size:12.5px; margin:6px 0 18px; }
+  .stats-table th, .stats-table td{ border:1px solid #C9D3D2; padding:6px 8px; text-align:center; }
+  .stats-table th{ background:#E4F1EE; color:var(--teal-deep); font-weight:700; }
+  .stats-table td.lbl{ text-align:left; font-weight:700; background:#FAFBFB; }
+  .stats-table tr.total td{ font-weight:900; background:#F0F3F2; }
+  .stats-table input[type=number]{ width:74px; padding:4px 6px; border:1px solid var(--line); border-radius:6px; text-align:center; font-family:var(--mono); font-size:12.5px; background:#FFFDF2; }
+  .stats-table input[type=number]:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 3px rgba(15,110,99,0.12); }
+  .stats-table td.muted{ color:var(--ink-soft); background:#F7F8F8; }
+  .stats-h{ font-size:13.5px; font-weight:800; margin:14px 0 2px; color:var(--teal-deep); }
+  .stats-note{ font-size:11.5px; color:var(--ink-soft); margin-bottom:4px; }
+  .stats-periods{ display:flex; gap:16px; flex-wrap:wrap; align-items:center; font-size:13px; font-weight:700; }
+  .stats-periods input{ width:90px; padding:5px 8px; border:1px solid var(--line); border-radius:6px; font-family:var(--mono); text-align:center; }
+  .stats-ok{ color:#1E7A43; font-weight:800; }
+  .stats-warn{ color:#B3382C; font-weight:800; }
+  .row-actions{ display:flex; gap:6px; justify-content:flex-end; }
+  .icon-btn{
+    border:none; background:transparent; color:var(--ink-soft); font-size:14px; padding:4px 6px; border-radius:6px;
+  }
+  .icon-btn:hover{ background:#EDEFEF; color:var(--ink); }
+  .icon-btn.del:hover{ background:var(--danger); color:var(--danger-ink); }
+  .empty{ padding:50px 20px; text-align:center; color:var(--ink-soft); font-size:13px; }
+
+  /* print-only view */
+  .print-only{ display:none; }
+  .print-only.offscreen-render{
+    display:block; position:fixed; left:-10000px; top:0; z-index:-1;
+    width:794px; background:#fff; margin:0; padding:0;
+  }
+  .print-only.offscreen-render .print-page:first-child{
+    page-break-before:avoid; break-before:avoid; margin-top:0;
+  }
+  .print-header{ text-align:center; margin-bottom:10px; }
+  .print-title-line{ font-size:12.5px; font-weight:700; letter-spacing:0.3px; white-space:nowrap; }
+  .print-legend-line{ font-size:11px; margin-top:2px; }
+  .print-legend{ color:#9A6400; font-weight:700; }
+  .print-cols{ display:flex; gap:10px; align-items:flex-start; }
+  .print-table{ flex:1; border-collapse:collapse; font-size:9.8px; table-layout:fixed; min-width:0; }
+  .print-table th, .print-table td{
+    border:1px solid #999; padding:4px 4.5px; text-align:left; overflow:visible; font-size:9.8px;
+    vertical-align:middle;
+  }
+  .print-table th{ background:#ddd; font-weight:700; white-space:nowrap; }
+  .print-table td.p-seq, .print-table th:first-child{
+    text-align:center; white-space:nowrap; padding-left:2px; padding-right:2px;
+  }
+  .print-table tbody tr td:first-child{ background:#ececec; }
+  .print-table td.p-seq{ font-weight:600; color:#444; }
+  .print-table td.p-code{ white-space:nowrap; }
+  .print-table td.p-station{ white-space:nowrap; }
+  .print-table td.p-name{ white-space:normal; word-break:break-word; line-height:1.25; }
+  .print-table tr.print-group td{
+    background:#dfe5e4; font-weight:700; text-align:center; letter-spacing:0.5px;
+  }
+  .print-table tr.print-level td{
+    background:#333; color:#fff; font-weight:700; text-align:center; letter-spacing:0.5px;
+  }
+  .print-table tr.print-subgroup td{
+    background:#f0f0f0; font-weight:700; text-align:center; color:#555; letter-spacing:0.5px;
+  }
+  .print-table td.p-station[colspan="2"]{ white-space:normal; word-break:break-word; text-align:left; }
+  .print-table tr.print-highlight td{ background:#FFEB99; }
+  .print-table tr.print-filler td{ color:transparent; }
+  .print-table, .print-table th, .print-table td, .print-table tr{
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact;
+  }
+  .print-table tr{ page-break-inside:avoid; break-inside:avoid; }
+  .print-page{ }
+  .print-page.page-break{ page-break-after:always; break-after:page; }
+
+  .cover-table{
+    width:100%; max-width:480px; margin:20px auto 0; border-collapse:collapse; font-size:13.5px;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact;
+  }
+  .cover-table th, .cover-table td{ border:1px solid #999; padding:7px 12px; text-align:center; }
+  .cover-table th{ background:#ddd; font-weight:700; }
+  .cover-table td:first-child{ text-align:left; font-weight:700; }
+  .cover-table tr.cover-total td{ font-weight:900; background:#eee; }
+
+  .changelog-table{
+    width:100%; max-width:none; margin-top:14px; border-collapse:collapse; font-size:10.5px;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact;
+  }
+  .changelog-table th, .changelog-table td{ border:1px solid #999; padding:4px 7px; text-align:left; }
+  .changelog-table th{ background:#ddd; font-weight:700; }
+  .changelog-table th:nth-child(2), .changelog-table td:nth-child(2){ text-align:center; }
+  .org-input{
+    border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:12px;
+    width:140px; background:#fff; color:var(--ink-soft);
+  }
+
+  /* modal */
+  .overlay{
+    position:fixed; inset:0; background:rgba(15,25,25,0.45); display:none;
+    align-items:center; justify-content:center; z-index:50; padding:20px;
+  }
+  .overlay.open{ display:flex; }
+  .modal{
+    background:#fff; border-radius:14px; width:100%; max-width:420px; padding:26px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.25);
+  }
+  .modal h2{ margin:0 0 4px; font-size:17px; }
+  .modal .sub{ font-size:12px; color:var(--ink-soft); margin-bottom:18px; }
+  .field{ margin-bottom:14px; }
+  .field label{ font-size:12px; font-weight:700; color:var(--ink-soft); display:block; margin-bottom:5px; }
+  .field input, .field select{
+    width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-family:inherit; font-size:13.5px;
+    outline:none;
+  }
+  .field input:focus, .field select:focus{ border-color:var(--teal); box-shadow:0 0 0 3px rgba(15,110,99,0.12); }
+  .field-row{ display:flex; gap:10px; }
+  .field-row .field{ flex:1; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+  .err{ font-size:11.5px; color:var(--danger-ink); margin-top:4px; min-height:14px; }
+
+  .toast{
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--teal-deep); color:#fff; padding:11px 20px; border-radius:30px; font-size:13px;
+    opacity:0; pointer-events:none; transition:all .25s ease; z-index:100; font-weight:600;
+    box-shadow:0 10px 30px rgba(0,0,0,0.2);
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  @media print{
+    .app { display:none !important; }
+    #storageWarning, #reconnectBanner, #backupReminderBanner{ display:none !important; }
+    .overlay, .toast{ display:none !important; }
+    body{ background:#fff; margin:0; }
+    .print-only{ display:block !important; margin:0; padding:0; }
+    .print-only .print-page:first-child{
+      page-break-before:avoid; break-before:avoid; margin-top:0;
+    }
+  }
+
+  @media (max-width: 760px){
+    .app{ flex-direction:column; }
+    .sidebar{ width:100%; flex-direction:row; overflow-x:auto; padding:14px; }
+    .brand, .brand-sub, .sidebar-foot{ display:none; }
+    .cat-btn{ white-space:nowrap; }
+    .main{ padding:18px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="storageWarning" class="storage-warning" style="display:none;">
+  ⚠️ 偵測到瀏覽器儲存功能異常，資料變更可能無法保存。請立即用左側「完整資料備份 (JSON)」或「下載完整 Excel」把目前資料存下來，並確認未使用無痕視窗、或檢查瀏覽器是否設定「關閉時清除網站資料」。
+</div>
+
+<div id="reconnectBanner" class="reconnect-banner" style="display:none;">
+  🔗 偵測到您上次使用的資料檔，瀏覽器需要您授權才能繼續自動存檔。
+  <button class="btn small primary" id="reconnectBtn" style="margin-left:10px;">點此重新連結</button>
+</div>
+
+<div id="backupReminderBanner" class="backup-reminder-banner" style="display:none;">
+  💾 提醒：建議定期使用「💾 完整資料備份 (JSON)」或「⬇️ 下載完整 Excel」另存一份，避免資料遺失（不論目前是否已設定自動存檔，都建議養成習慣）。
+  <button class="btn small ghost" id="backupReminderCloseBtn" style="margin-left:10px;">知道了</button>
+</div>
+
+<div class="app">
+  <div class="sidebar">
+    <div class="brand"><span class="dot"></span>藥品品項表</div>
+    <div class="brand-sub">院內常備 ‧ 急採管理</div>
+    <div id="catList"></div>
+    <div class="sidebar-actions">
+      <button class="side-action-btn" id="coverBtn">📋 品項表封面總覽</button>
+      <button class="side-action-btn" id="changeLogBtn">🕓 本次異動明細</button>
+      <button class="side-action-btn" id="changeStatsBtn">📊 品項數異動統計</button>
+      <button class="side-action-btn" id="printAllBtn">🖨️ 一鍵列印全部分類</button>
+      <button class="side-action-btn" id="downloadPdfBtn">📄 一鍵下載全分類 PDF</button>
+      <button class="side-action-btn" id="exportAllBtn">⬇️ 下載完整 Excel</button>
+      <button class="side-action-btn" id="exportPrintStyleBtn">⬇️ 下載列印格式 Excel</button>
+      <button class="side-action-btn" id="linkFileBtn">🔗 連結／建立資料檔（自動存檔）</button>
+      <button class="side-action-btn" id="openFileBtn">📁 開啟既有資料檔</button>
+      <button class="side-action-btn" id="backupBtn">💾 完整資料備份 (JSON)</button>
+      <button class="side-action-btn" id="restoreBtn">📂 還原資料備份 (JSON)</button>
+      <input type="file" id="restoreInput" accept=".json" style="display:none;">
+    </div>
+    <div class="sidebar-foot"><span id="dataFileStatus" style="font-weight:700;">自動存檔：檢查中...</span><br><span id="lastArchiveDate" style="opacity:0.85;">載入中...</span></div>
+  </div>
+
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1 id="catTitle">外用藥</h1>
+        <div class="meta" id="catMeta">共 0 項</div>
+      </div>
+      <div class="actions">
+        <input type="text" id="printOrgInput" class="org-input" placeholder="機構名稱（列印用）">
+        <button class="btn warn-outline small" id="clearMarksBtn">清除異動標色</button>
+        <button class="btn ghost small" id="templateBtn">下載範本</button>
+        <button class="btn ghost small" id="importBtn">匯入 Excel</button>
+        <input type="file" id="importInput" accept=".xlsx,.xls,.csv" style="display:none;">
+        <button class="btn ghost small" id="printBtn">列印 / PDF</button>
+        <button class="btn primary" id="addBtn">＋ 新增品項</button>
+      </div>
+    </div>
+
+    <div class="stats" id="statsRow"></div>
+
+    <div class="toolbar">
+      <div class="search">
+        🔍 <input type="text" id="searchInput" placeholder="搜尋藥品四碼或名稱...">
+      </div>
+      <div class="legend">
+        <span><i class="swatch new"></i>新增品項</span>
+        <span><i class="swatch edit"></i>異動品項</span>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:44px;">序號</th>
+            <th data-sort="code" style="width:110px;">藥品四碼 <span class="arrow">↕</span></th>
+            <th data-sort="name">藥品名稱 <span class="arrow">↕</span></th>
+            <th data-sort="station1">藥站1</th>
+            <th data-sort="station2">藥站2</th>
+            <th data-sort="status">分類</th>
+            <th style="width:78px; text-align:center;" title="勾選＝計入常備／急採品項數；不勾＝不計入（例如自製藥水、非藥品品項）">列入品項數</th>
+            <th style="width:90px;"></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="emptyState" style="display:none;">此分類目前沒有品項，點選右上角「新增品項」開始建立。</div>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2 id="modalTitle">新增品項</h2>
+    <div class="sub" id="modalSub">加入後將自動排序，並以綠色標示</div>
+    <div class="field">
+      <label>藥品四碼</label>
+      <input type="text" id="f_code" maxlength="6" placeholder="例：VIRL" style="text-transform:uppercase;">
+    </div>
+    <div class="field">
+      <label>藥品名稱</label>
+      <input type="text" id="f_name" placeholder="例：Aclovir">
+    </div>
+    <div class="field-row" id="field_station_row">
+      <div class="field">
+        <label id="f_station1_label">藥站1</label>
+        <input type="text" id="f_station1" placeholder="例：6102">
+      </div>
+      <div class="field" id="field_station2_wrap">
+        <label>藥站2</label>
+        <input type="text" id="f_station2" placeholder="例：6202">
+      </div>
+    </div>
+    <div class="field" id="field_group_wrap" style="display:none;">
+      <label>群組標籤（選填，例如：流感）</label>
+      <input type="text" id="f_group" placeholder="同群組標籤的品項會自動排在一起">
+    </div>
+    <div class="field" id="field_status_normal">
+      <label>分類標記</label>
+      <select id="f_status"></select>
+    </div>
+    <div class="field" id="field_count_wrap">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="f_count" style="width:auto;">
+        <span>列入品項數計算（取消勾選＝不計入封面總覽與異動統計）</span>
+      </label>
+    </div>
+    <div class="field-row" id="field_level_type" style="display:none;">
+      <div class="field">
+        <label id="f_level_label">分類</label>
+        <select id="f_level"></select>
+      </div>
+      <div class="field" id="field_type_wrap">
+        <label id="f_type_label">細項</label>
+        <select id="f_type"></select>
+      </div>
+    </div>
+    <div class="err" id="formErr"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="cancelBtn">取消</button>
+      <button class="btn primary" id="saveBtn">儲存</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="print-only" id="printView"></div>
+
+<!-- Change log overlay -->
+<div class="overlay" id="changeLogOverlay">
+  <div class="modal" style="max-width:820px;">
+    <h2>本次新增／異動品項明細</h2>
+    <div class="sub" id="changeLogSub"></div>
+    <div style="max-height:420px; overflow:auto; border:1px solid var(--line); border-radius:8px;">
+      <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+        <thead>
+          <tr style="background:#FAFBFB;">
+            <th style="padding:8px 10px; text-align:center; border-bottom:1px solid var(--line); width:30px;"><input type="checkbox" id="changeLogSelectAll" title="全選／取消全選"></th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">分類</th>
+            <th style="padding:8px 10px; text-align:center; border-bottom:1px solid var(--line);">異動</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">四碼</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">藥品名稱</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">藥站1</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">藥站2</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">分類標記</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">異動時間</th>
+          </tr>
+        </thead>
+        <tbody id="changeLogBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="changeLogCloseBtn">關閉</button>
+      <button class="btn warn-outline" id="changeLogDeleteSelectedBtn" disabled>刪除勾選項目</button>
+      <button class="btn warn-outline" id="changeLogClearAllBtn">清除全部標記</button>
+      <button class="btn primary" id="changeLogPrintBtn">列印明細</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Change statistics overlay (可填寫的品項數異動統計表，格式比照封面總覽) -->
+<div class="overlay" id="changeStatsOverlay">
+  <div class="modal" style="max-width:1020px; max-height:92vh; overflow:auto;">
+    <h2>品項數異動統計</h2>
+    <div class="sub">格式比照封面總覽：可填寫上季各分類品項數，系統自動計算本季品項數、異動數，並依「本次異動明細」自動統計新增／異動／刪除項目數。填寫內容會自動儲存。</div>
+    <div id="changeStatsBody"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="changeStatsCloseBtn">關閉</button>
+      <button class="btn warn-outline" id="changeStatsAutoFillBtn">依異動明細自動帶入新增／刪除數量</button>
+      <button class="btn primary" id="changeStatsPrintBtn">列印</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- 單機離線儲存層（取代 Claude 平台專屬的 window.storage，改用瀏覽器 localStorage）----------
+// 資料會存在使用者這台電腦、這個瀏覽器裡；換瀏覽器或清除瀏覽器資料會遺失，請自行定期用
+// 「下載完整 Excel」備份。介面（get/set/delete/list）維持與原本相容，內部邏輯不需再改動。
+const storage = {
+  async get(key){
+    try{
+      const raw = localStorage.getItem('drugapp:' + key);
+      if(raw === null) return null;
+      return { key, value: raw };
+    }catch(e){ return null; }
+  },
+  async set(key, value){
+    try{
+      localStorage.setItem('drugapp:' + key, value);
+      return { key, value };
+    }catch(e){ return null; }
+  },
+  async delete(key){
+    try{
+      localStorage.removeItem('drugapp:' + key);
+      return { key, deleted: true };
+    }catch(e){ return null; }
+  },
+  async list(prefix){
+    try{
+      const p = 'drugapp:' + (prefix||'');
+      const keys = [];
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i);
+        if(k && k.indexOf(p) === 0) keys.push(k.slice('drugapp:'.length));
+      }
+      return { keys, prefix };
+    }catch(e){ return null; }
+  }
+};
+
+const CATEGORIES = ["外用藥","針劑藥","口服藥","藥水","管制藥","透析液","不計價","旅醫門診、疾管局、自製藥品"];
+// 這個分類不計入封面總覽的品項統計（旅遊醫學/疾管局/自製藥品性質特殊，非一般常備藥）
+const COVER_EXCLUDE_CATEGORIES = ["旅醫門診、疾管局、自製藥品"];
+const STATUS_META = {
+  "常備": {label:"常備", cls:""},
+  "急採": {label:"急採", cls:"urgent"},
+  "暫代": {label:"暫代", cls:"sub"},
+  "免費": {label:"免費藥品", cls:"free"},
+  "不再採購": {label:"不再採購", cls:"discontinued"},
+  "無個案": {label:"無個案使用", cls:"discontinued"},
+  "HD藥水": {label:"HD藥水", cls:"free"},
+  "居家": {label:"居家", cls:"sub"},
+  "非藥品品項": {label:"非藥品品項", cls:"discontinued"},
+  "自製藥水": {label:"自製藥水", cls:"sub"},
+};
+const DEFAULT_STATUS_OPTIONS = ["常備","急採","暫代","免費","不再採購","無個案"];
+// 部分分類使用專屬的分類選項組合，而非上面的預設 6 種
+const CATEGORY_STATUS_OPTIONS = {
+  "藥水": ["常備","急採","自製藥水","暫代","不再採購","免費","無個案"],
+  "透析液": ["常備","急採","不再採購","HD藥水","居家"],
+  "不計價": ["常備","急採","非藥品品項","暫代","不再採購","無個案"],
+};
+function statusOptionsFor(cat){ return CATEGORY_STATUS_OPTIONS[cat] || DEFAULT_STATUS_OPTIONS; }
+
+// 管藥（管制藥）使用「級別 -> 劑型/狀態」二層分類，其他分類維持單層 status 分類
+const CATEGORY_CLASSIFY = {
+  "管制藥": {
+    levelLabel: "管制等級", typeLabel: "分類",
+    levels: [
+      { key:"4級",   types:["外用","注射","口服","急採","暫代","不再採購"] },
+      { key:"3級",   types:["外用","注射","口服","急採","暫代","不再採購"] },
+      { key:"1&2級", types:["貼片","注射","口服","藥水","急採","暫代","不再採購"] },
+    ]
+  },
+  "旅醫門診、疾管局、自製藥品": {
+    levelLabel: "分類", typeLabel: "細項",
+    levels: [
+      { key:"旅遊醫學特別門診", types:[] },
+      { key:"公費疫苗", types:[] },
+      { key:"疾管局品項及毒物中心", types:["注射藥","口服","藥水","外用藥","HIV藥水","無個案"] },
+      { key:"自製藥品", types:[] },
+      { key:"原料藥", types:[] },
+    ]
+  }
+};
+const TYPE_TAG_CLASS = { "急採":"urgent", "暫代":"sub", "不再採購":"discontinued", "無個案":"discontinued" };
+// 這幾個等級的藥站1/藥站2其實是文字敘述，合併成單一欄位顯示
+const MERGE_STATION_LEVELS = ["旅遊醫學特別門診","公費疫苗"];
+// 這個分類的品項可以加上自由文字的群組標籤（例如「流感」），同標籤的品項排序時會排在一起
+const GROUP_TAG_CATEGORIES = ["旅醫門診、疾管局、自製藥品"];
+function categoryHasGroupTag(cat){ return GROUP_TAG_CATEGORIES.includes(cat); }
+function shouldMergeStations(level){ return MERGE_STATION_LEVELS.includes(level); }
+// 列印時各分類的欄數，預設三欄，特定分類可改為其他欄數
+const PRINT_COLUMNS_OVERRIDE = { "不計價": 2 };
+function printColumnsFor(cat){ return PRINT_COLUMNS_OVERRIDE[cat] || 3; }
+// 列印時每一欄最多容納的列數（含標題橫幅列），預設 40 列，特定分類可調整
+const PRINT_ROWS_PER_COL_OVERRIDE = {
+  "透析液": 35,
+  "旅醫門診、疾管局、自製藥品": 35,
+};
+function rowsPerColFor(cat){ return PRINT_ROWS_PER_COL_OVERRIDE[cat] || 40; }
+// 特定分類的等級/分類要固定放在第幾欄（0=第一欄），而不是用自動填滿的方式排列
+// 沒列出的等級/分類預設放第一欄（欄位索引 0）
+const PRINT_COLUMN_ASSIGNMENT = {
+  "藥水": {
+    "常備": 0,
+    "急採": 1,
+    "自製藥水": 2,
+  },
+  "透析液": {
+    "HD藥水": 1,
+    "居家": 2,
+  },
+  "管制藥": {
+    "4級": 0,
+    "3級": 1,
+    "1&2級": 2,
+  },
+};
+function printColumnAssignmentFor(cat){ return PRINT_COLUMN_ASSIGNMENT[cat] || null; }
+// 這些分類的指定等級一定要從新的一欄開始（不會接在前一個等級剩餘空間），
+// 但填滿後可以自然溢到下一欄接續，不像 PRINT_COLUMN_ASSIGNMENT 那樣被鎖死在固定欄位
+const PRINT_COLUMN_BREAK_BEFORE = {
+  "旅醫門診、疾管局、自製藥品": ["疾管局品項及毒物中心"],
+};
+function printColumnBreaksFor(cat){ return PRINT_COLUMN_BREAK_BEFORE[cat] || null; }
+// Excel 沒有版面高度限制，旅醫類在 Excel 裡改用嚴格固定分欄（每個等級各佔一欄，往下延伸到底）
+const EXCEL_COLUMN_ASSIGNMENT = {
+  "旅醫門診、疾管局、自製藥品": {
+    "旅遊醫學特別門診": 0,
+    "公費疫苗": 0,
+    "疾管局品項及毒物中心": 1,
+    "自製藥品": 2,
+    "原料藥": 2,
+  },
+};
+// 這些分類的每個等級各自獨立成頁（等級標題就是頁面標題），而不是跟其他等級擠在同一頁的不同欄
+const PRINT_PAGE_PER_LEVEL = [];
+// 管制藥的藥名若含「(急採)」（半形或全形括號皆可），就算成急採品項，
+// 不必另外把分類改成「急採」（這樣可以保留外用／注射／口服等劑型分類）。
+// 已標為「暫代」「不再採購」的品項不受影響，仍不計入常備或急採。
+function isUrgentItem(cat, it){
+  const key = categoryMode(cat) === 'level-type' ? it.type : it.status;
+  if(key === '急採') return true;
+  if(cat === '管制藥' && !['暫代','不再採購'].includes(key) && /[（(]\s*急採\s*[）)]/.test(it.name || '')) return true;
+  return false;
+}
+// 統計常備／急採時使用的分類標記：判定為急採的品項一律回傳「急採」
+function effectiveKey(cat, it){
+  if(isUrgentItem(cat, it)) return '急採';
+  return categoryMode(cat) === 'level-type' ? it.type : it.status;
+}
+
+function levelBannerText(cat, items, level){
+  if(cat !== '管制藥') return level;
+  const levelItems = items.filter(it => it.level === level);
+  const total = levelItems.length;
+  const urgent = levelItems.filter(it => isCounted(cat, it) && isUrgentItem(cat, it)).length;
+  const regular = levelItems.filter(it => isCounted(cat, it) && !isUrgentItem(cat, it)).length;
+  return `${level}管制藥(${total}項-常備${regular}項;急採${urgent}項)`;
+}
+
+function categoryMode(cat){ return CATEGORY_CLASSIFY[cat] ? 'level-type' : 'status'; }
+function levelsFor(cat){ return CATEGORY_CLASSIFY[cat] ? CATEGORY_CLASSIFY[cat].levels : []; }
+function levelLabelFor(cat){ return (CATEGORY_CLASSIFY[cat] && CATEGORY_CLASSIFY[cat].levelLabel) || '分類'; }
+function typeLabelFor(cat){ return (CATEGORY_CLASSIFY[cat] && CATEGORY_CLASSIFY[cat].typeLabel) || '細項'; }
+function typesForLevel(cat, levelKey){
+  const cfg = CATEGORY_CLASSIFY[cat];
+  if(!cfg) return [];
+  const lvl = cfg.levels.find(l => l.key === levelKey);
+  return lvl ? lvl.types : [];
+}
+function levelHasTypes(cat, levelKey){ return typesForLevel(cat, levelKey).length > 0; }
+function itemLabel(it, cat){
+  if(categoryMode(cat) === 'level-type') return it.type ? `${it.level || ''} · ${it.type}` : (it.level || '');
+  return (STATUS_META[it.status] || {label: it.status}).label;
+}
+function itemTagClass(it, cat){
+  if(categoryMode(cat) === 'level-type') return TYPE_TAG_CLASS[it.type] || '';
+  return (STATUS_META[it.status] || {cls:''}).cls;
+}
+
+let state = {
+  activeCat: CATEGORIES[0],
+  items: {},          // { category: [ {id, code, name, station1, station2, status, isNew, isEdited, updatedAt} ] }
+  deletions: {},       // { category: [ {code, name, station1, station2, status/level/type, deletedAt} ] } 本次刪除品項紀錄
+  changeStats: null,   // 品項數異動統計表（可填寫），由 mergeChangeStats() 在載入時初始化
+  sortKey: "status",
+  sortDir: 1,
+  search: "",
+  editingId: null,
+};
+
+function uid(){ return 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+async function loadCategory(cat){
+  try{
+    const res = await storage.get('drugs:' + cat);
+    return res && res.value ? JSON.parse(res.value) : [];
+  }catch(e){
+    return [];
+  }
+}
+
+async function saveCategory(cat){
+  try{
+    const res = await storage.set('drugs:' + cat, JSON.stringify(state.items[cat] || []));
+    if(!res) throw new Error('storage.set returned null');
+  }catch(e){
+    showToast('儲存失敗，請稍後再試');
+    showStorageWarning();
+  }
+  scheduleDataFileWrite(); // 若已連結資料檔，同步自動存檔到實體檔案
+}
+
+async function loadDeletions(cat){
+  try{
+    const res = await storage.get('deletions:' + cat);
+    return res && res.value ? JSON.parse(res.value) : [];
+  }catch(e){
+    return [];
+  }
+}
+
+async function saveDeletions(cat){
+  try{
+    const res = await storage.set('deletions:' + cat, JSON.stringify(state.deletions[cat] || []));
+    if(!res) throw new Error('storage.set returned null');
+  }catch(e){
+    showToast('刪除紀錄儲存失敗');
+    showStorageWarning();
+  }
+  scheduleDataFileWrite(); // 若已連結資料檔，同步自動存檔到實體檔案
+}
+
+// 瀏覽器儲存自我檢測：實際寫入/讀回/刪除一個測試值，確認 localStorage 真的可用並會保留資料。
+// 無痕視窗、瀏覽器封鎖本機檔案儲存權限、或「關閉時清除網站資料」設定都可能讓這個測試失敗。
+function runStorageSelfTest(){
+  try{
+    const testKey = 'drugapp:__selftest__';
+    const testVal = 'ok_' + Date.now();
+    localStorage.setItem(testKey, testVal);
+    const readBack = localStorage.getItem(testKey);
+    localStorage.removeItem(testKey);
+    return readBack === testVal;
+  }catch(e){
+    return false;
+  }
+}
+
+function showStorageWarning(){
+  const el = document.getElementById('storageWarning');
+  if(el) el.style.display = 'block';
+}
+
+function hideStorageWarning(){
+  const el = document.getElementById('storageWarning');
+  if(el) el.style.display = 'none';
+}
+
+// ---------- 完整資料備份／還原（JSON）----------
+// 不依賴瀏覽器儲存是否正常，讓使用者可以隨時把「所有分類的全部品項」匯出成一個 JSON 檔自行保管，
+// 之後不管什麼原因資料被清空，都能用「還原資料備份」直接讀回，不需要重新跑一次 Excel 匯入。
+/* ---------- 自動存檔到電腦裡的真實檔案（File System Access API）----------
+   這是比瀏覽器內部儲存（localStorage）更可靠的保存方式：資料會即時自動寫入您指定的
+   一個實體 .json 檔案（例如放在 D:\藥局系統\藥品品項表資料.json）。這樣一來：
+   - 電腦重開機、瀏覽器清除資料、甚至換一台電腦帶著這個檔案走，資料都還在
+   - 不需要每次手動「下載備份／還原備份」，存檔是自動的
+   瀏覽器會記住您選的檔案，下次開啟網頁時會自動接回同一個檔案繼續用。
+   （需要 Chrome / Edge，且必須透過「啟動本機伺服器.bat」以 http://localhost 開啟。）
+*/
+const DATA_FILE_IDB_NAME = 'drugAppFileHandle';
+const DATA_FILE_IDB_STORE = 'handles';
+const DATA_FILE_IDB_KEY = 'dataFile';
+let dataFileHandle = null;
+let dataFileWriteTimer = null;
+
+function supportsFileSystemAccess(){
+  return typeof window.showSaveFilePicker === 'function';
+}
+
+function idbOpen(){
+  return new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DATA_FILE_IDB_NAME, 1);
+    req.onupgradeneeded = ()=>{
+      if(!req.result.objectStoreNames.contains(DATA_FILE_IDB_STORE)){
+        req.result.createObjectStore(DATA_FILE_IDB_STORE);
+      }
+    };
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> reject(req.error);
+  });
+}
+
+async function idbSetHandle(handle){
+  try{
+    const db = await idbOpen();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(DATA_FILE_IDB_STORE, 'readwrite');
+      tx.objectStore(DATA_FILE_IDB_STORE).put(handle, DATA_FILE_IDB_KEY);
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }catch(e){ /* 記不住控制代碼也不影響當次使用 */ }
+}
+
+async function idbGetHandle(){
+  try{
+    const db = await idbOpen();
+    return await new Promise((resolve, reject)=>{
+      const tx = db.transaction(DATA_FILE_IDB_STORE, 'readonly');
+      const req = tx.objectStore(DATA_FILE_IDB_STORE).get(DATA_FILE_IDB_KEY);
+      req.onsuccess = ()=> resolve(req.result || null);
+      req.onerror = ()=> reject(req.error);
+    });
+  }catch(e){ return null; }
+}
+
+async function idbClearHandle(){
+  try{
+    const db = await idbOpen();
+    await new Promise((resolve, reject)=>{
+      const tx = db.transaction(DATA_FILE_IDB_STORE, 'readwrite');
+      tx.objectStore(DATA_FILE_IDB_STORE).delete(DATA_FILE_IDB_KEY);
+      tx.oncomplete = resolve;
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }catch(e){ /* ignore */ }
+}
+
+// 把目前所有分類的品項、刪除紀錄、機構名稱打包成一份完整資料
+function serializeAllData(){
+  return {
+    savedAt: Date.now(),
+    printOrgName: (document.getElementById('printOrgInput')||{}).value ? document.getElementById('printOrgInput').value.trim() : '',
+    items: state.items,
+    deletions: state.deletions,
+    changeStats: state.changeStats
+  };
+}
+
+// 把讀進來的資料套用到目前畫面（用於開檔還原）
+function applyLoadedData(data){
+  if(!data || typeof data.items !== 'object' || !data.items) return false;
+  CATEGORIES.forEach(cat=>{
+    state.items[cat] = Array.isArray(data.items[cat]) ? data.items[cat] : [];
+    state.deletions[cat] = (data.deletions && Array.isArray(data.deletions[cat])) ? data.deletions[cat] : [];
+  });
+  if(data.printOrgName && document.getElementById('printOrgInput')){
+    document.getElementById('printOrgInput').value = data.printOrgName;
+  }
+  if(data.changeStats){
+    state.changeStats = mergeChangeStats(data.changeStats);
+  }
+  return true;
+}
+
+function updateDataFileStatus(){
+  const el = document.getElementById('dataFileStatus');
+  if(!el) return;
+  if(!supportsFileSystemAccess()){
+    el.textContent = '自動存檔：此開啟方式不支援';
+    el.style.color = '#F3C766';
+    return;
+  }
+  if(dataFileHandle){
+    el.textContent = `自動存檔中：${dataFileHandle.name}`;
+    el.style.color = '#7FE0C2';
+  }else{
+    el.textContent = '自動存檔：尚未連結資料檔';
+    el.style.color = '#F3C766';
+  }
+}
+
+// 實際把資料寫進檔案（不等防抖動，立刻執行）。關閉網頁前搶救存檔、或防抖動計時器
+// 到期時都會呼叫這個函式。
+async function writeDataFileNow(){
+  if(!dataFileHandle) return;
+  try{
+    const writable = await dataFileHandle.createWritable();
+    await writable.write(JSON.stringify(serializeAllData(), null, 2));
+    await writable.close();
+  }catch(e){
+    showToast('自動存檔寫入失敗，請重新連結資料檔');
+    dataFileHandle = null;
+    updateDataFileStatus();
+  }
+}
+
+// 排程寫入檔案（用防抖動，避免連續操作時頻繁寫檔）
+function scheduleDataFileWrite(){
+  if(!dataFileHandle) return;
+  clearTimeout(dataFileWriteTimer);
+  dataFileWriteTimer = setTimeout(writeDataFileNow, 400);
+}
+
+// 建立（或覆蓋）一個資料檔，並從此自動存檔到這個檔案
+async function linkNewDataFile(){
+  if(!supportsFileSystemAccess()){
+    showToast('目前的開啟方式不支援自動存檔，請改用「啟動本機伺服器.bat」開啟，並使用 Chrome 或 Edge');
+    return;
+  }
+  try{
+    const handle = await window.showSaveFilePicker({
+      suggestedName: '藥品品項表資料.json',
+      types: [{ description: 'JSON 資料檔', accept: {'application/json': ['.json']} }]
+    });
+    dataFileHandle = handle;
+    await idbSetHandle(handle);
+    // 立刻寫入一次，確保檔案內容就是目前的資料
+    const writable = await handle.createWritable();
+    await writable.write(JSON.stringify(serializeAllData(), null, 2));
+    await writable.close();
+    updateDataFileStatus();
+    showToast(`已連結資料檔，之後會自動存檔到：${handle.name}`);
+  }catch(e){
+    if(e && e.name === 'AbortError') return; // 使用者自行取消，不需提示
+    showToast('連結資料檔失敗');
+  }
+}
+
+// 開啟一個既有的資料檔，載入它的內容，並從此自動存檔到這個檔案
+async function openExistingDataFile(){
+  if(!supportsFileSystemAccess()){
+    showToast('目前的開啟方式不支援自動存檔，請改用「啟動本機伺服器.bat」開啟，並使用 Chrome 或 Edge');
+    return;
+  }
+  try{
+    const [handle] = await window.showOpenFilePicker({
+      types: [{ description: 'JSON 資料檔', accept: {'application/json': ['.json']} }],
+      multiple: false
+    });
+    const file = await handle.getFile();
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if(!applyLoadedData(data)){
+      showToast('資料檔格式不正確，找不到品項資料');
+      return;
+    }
+    dataFileHandle = handle;
+    await idbSetHandle(handle);
+    // 同步寫回瀏覽器內部儲存，讓兩邊保持一致
+    for(const cat of CATEGORIES){
+      await saveCategory(cat);
+      await saveDeletions(cat);
+    }
+    renderAll();
+    updateDataFileStatus();
+    showToast(`已載入並連結資料檔：${handle.name}`);
+  }catch(e){
+    if(e && e.name === 'AbortError') return;
+    showToast('開啟資料檔失敗，請確認檔案格式是否正確');
+  }
+}
+
+async function unlinkDataFile(){
+  dataFileHandle = null;
+  await idbClearHandle();
+  updateDataFileStatus();
+  showToast('已停止自動存檔');
+}
+
+// 開啟網頁時，嘗試自動接回上次使用的資料檔
+async function tryRestoreDataFile(){
+  if(!supportsFileSystemAccess()){
+    updateDataFileStatus();
+    return;
+  }
+  const handle = await idbGetHandle();
+  if(!handle){
+    updateDataFileStatus();
+    return;
+  }
+  try{
+    const perm = await handle.queryPermission({ mode: 'readwrite' });
+    if(perm === 'granted'){
+      dataFileHandle = handle;
+      const file = await handle.getFile();
+      const text = await file.text();
+      if(text && text.trim()){
+        const data = JSON.parse(text);
+        if(applyLoadedData(data)){
+          for(const cat of CATEGORIES){
+            await saveCategory(cat);
+            await saveDeletions(cat);
+          }
+        }
+      }
+      updateDataFileStatus();
+    }else if(perm === 'prompt'){
+      // 瀏覽器規定重新開啟後要由使用者按一下才能恢復存取權限
+      const banner = document.getElementById('reconnectBanner');
+      if(banner){
+        banner.style.display = 'block';
+        banner._pendingHandle = handle;
+      }
+      updateDataFileStatus();
+    }else{
+      updateDataFileStatus();
+    }
+  }catch(e){
+    updateDataFileStatus();
+  }
+}
+
+// 使用者按下「重新連結」後，向瀏覽器要求恢復檔案存取權限
+async function reconnectDataFile(){
+  const banner = document.getElementById('reconnectBanner');
+  const handle = banner && banner._pendingHandle;
+  if(!handle) return;
+  try{
+    const perm = await handle.requestPermission({ mode: 'readwrite' });
+    if(perm !== 'granted'){
+      showToast('未取得檔案存取權限，資料將只存在瀏覽器內');
+      return;
+    }
+    dataFileHandle = handle;
+    const file = await handle.getFile();
+    const text = await file.text();
+    if(text && text.trim()){
+      const data = JSON.parse(text);
+      if(applyLoadedData(data)){
+        for(const cat of CATEGORIES){
+          await saveCategory(cat);
+          await saveDeletions(cat);
+        }
+      }
+    }
+    banner.style.display = 'none';
+    renderAll();
+    updateDataFileStatus();
+    showToast(`已重新連結資料檔：${handle.name}`);
+  }catch(e){
+    showToast('重新連結失敗，請改用「連結／建立資料檔」重新指定');
+  }
+}
+
+function downloadFullBackup(){
+  const backup = { exportedAt: Date.now(), ...serializeAllData() };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `藥品品項表_完整備份_${rocDateStr()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('已下載完整資料備份，請妥善保管此檔案');
+}
+
+async function restoreFullBackup(file){
+  if(!file) return;
+  if(!confirm('還原備份將覆蓋目前所有分類的品項資料，確定要繼續嗎？此動作無法復原。')) return;
+  let backup;
+  try{
+    const text = await file.text();
+    backup = JSON.parse(text);
+  }catch(e){
+    showToast('備份檔讀取失敗，請確認檔案格式是否正確');
+    return;
+  }
+  if(!backup || typeof backup.items !== 'object' || !backup.items){
+    showToast('備份檔格式不正確，找不到品項資料');
+    return;
+  }
+
+  applyLoadedData(backup); // 同時還原品項、刪除紀錄、機構名稱與品項數異動統計表
+  for(const cat of CATEGORIES){
+    await saveCategory(cat);
+    await saveDeletions(cat);
+  }
+  if(backup.printOrgName){
+    await storage.set('app:printOrgName', backup.printOrgName);
+  }
+  await saveChangeStats();
+  renderAll();
+  showToast('已還原完整資料備份');
+}
+
+function showToast(msg, sticky){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  if(!sticky){
+    t._timer = setTimeout(()=> t.classList.remove('show'), 2200);
+  }
+}
+
+function hideToastNow(){
+  const t = document.getElementById('toast');
+  clearTimeout(t._timer);
+  t.classList.remove('show');
+}
+
+function renderSidebar(){
+  const wrap = document.getElementById('catList');
+  wrap.innerHTML = '';
+  CATEGORIES.forEach(cat=>{
+    const btn = document.createElement('button');
+    btn.className = 'cat-btn' + (cat === state.activeCat ? ' active' : '');
+    const count = (state.items[cat] || []).length;
+    btn.innerHTML = `<span>${cat}</span><span class="cnt">${count}</span>`;
+    btn.onclick = ()=>{ state.activeCat = cat; state.search=''; document.getElementById('searchInput').value=''; renderAll(); };
+    wrap.appendChild(btn);
+  });
+}
+
+function renderStats(){
+  const items = state.items[state.activeCat] || [];
+  const row = document.getElementById('statsRow');
+
+  if(categoryMode(state.activeCat) === 'level-type'){
+    const cards = [['總品項', items.length]];
+    levelsFor(state.activeCat).forEach(lvl=>{
+      cards.push([lvl.key, items.filter(it => it.level === lvl.key).length]);
+    });
+    row.innerHTML = cards.map(c => `
+      <div class="stat-card">
+        <div class="num">${c[1]}</div>
+        <div class="lbl">${c[0]}</div>
+      </div>`).join('');
+    return;
+  }
+
+  const options = statusOptionsFor(state.activeCat);
+  const counts = {};
+  options.forEach(o => counts[o] = 0);
+  items.forEach(it => { if(counts.hasOwnProperty(it.status)) counts[it.status]++; });
+  const cards = [['總品項', items.length]];
+  options.forEach(o => cards.push([(STATUS_META[o]||{label:o}).label, counts[o]]));
+  row.innerHTML = cards.map(c => `
+    <div class="stat-card">
+      <div class="num">${c[1]}</div>
+      <div class="lbl">${c[0]}</div>
+    </div>`).join('');
+}
+
+function getFilteredSorted(){
+  let items = (state.items[state.activeCat] || []).slice();
+  if(state.search){
+    const q = state.search.toLowerCase();
+    items = items.filter(it => it.code.toLowerCase().includes(q) || it.name.toLowerCase().includes(q));
+  }
+  const isLevelType = categoryMode(state.activeCat) === 'level-type';
+
+  if(state.sortKey === 'status' && isLevelType){
+    const levels = levelsFor(state.activeCat);
+    const levelOrder = levels.map(l => l.key);
+    const hasGroup = categoryHasGroupTag(state.activeCat);
+    items.sort((a,b)=>{
+      const ai = levelOrder.indexOf(a.level), bi = levelOrder.indexOf(b.level);
+      if(ai !== bi) return (ai - bi) * state.sortDir;
+      const typesOrder = typesForLevel(state.activeCat, a.level);
+      const ati = typesOrder.indexOf(a.type), bti = typesOrder.indexOf(b.type);
+      if(ati !== bti) return (ati - bti) * state.sortDir;
+      if(hasGroup){
+        const ag = a.group || '', bg = b.group || '';
+        if(ag !== bg) return ag.localeCompare(bg, 'zh-Hant') * state.sortDir;
+      }
+      return a.name.localeCompare(b.name, 'zh-Hant');
+    });
+  }else if(state.sortKey === 'status' && !isLevelType){
+    const order = statusOptionsFor(state.activeCat);
+    items.sort((a,b)=>{
+      const ai = order.indexOf(a.status);
+      const bi = order.indexOf(b.status);
+      if(ai !== bi) return (ai - bi) * state.sortDir;
+      return a.name.localeCompare(b.name, 'zh-Hant');
+    });
+  }else{
+    items.sort((a,b)=>{
+      let av = (a[state.sortKey]||'').toString().toLowerCase();
+      let bv = (b[state.sortKey]||'').toString().toLowerCase();
+      if(av < bv) return -1*state.sortDir;
+      if(av > bv) return 1*state.sortDir;
+      return 0;
+    });
+  }
+  return items;
+}
+
+function renderTable(){
+  document.getElementById('catTitle').textContent = state.activeCat;
+  const all = state.items[state.activeCat] || [];
+  const _cc = coverCounts(state.activeCat);
+  document.getElementById('catMeta').textContent = COVER_EXCLUDE_CATEGORIES.includes(state.activeCat)
+    ? `共 ${all.length} 項`
+    : `共 ${all.length} 項　·　列入品項數 ${_cc.regular + _cc.urgent} 項（常備 ${_cc.regular}／急採 ${_cc.urgent}）`;
+
+  const cat = state.activeCat;
+  const isLevelType = categoryMode(cat) === 'level-type';
+  const items = getFilteredSorted();
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  document.getElementById('emptyState').style.display = items.length ? 'none' : 'block';
+
+  const isGrouped = state.sortKey === 'status';
+  const hasGroup = categoryHasGroupTag(cat);
+  let lastStatus = null, lastLevel = null, lastType = null, lastGroup = null;
+
+  items.forEach((it, idx)=>{
+    const label = itemLabel(it, cat);
+    const tagCls = itemTagClass(it, cat);
+
+    if(isGrouped){
+      if(isLevelType){
+        const isLevelStart = it.level !== lastLevel;
+        if(isLevelStart){ lastLevel = it.level; lastType = null; lastGroup = null; }
+        const isTypeStart = !!it.type && it.type !== lastType;
+        if(isTypeStart) lastType = it.type;
+
+        if(isLevelStart){
+          const row = document.createElement('tr');
+          row.className = 'level-row';
+          row.innerHTML = `<td></td><td colspan="7">${escapeHtml(levelBannerText(cat, items, it.level))}</td>`;
+          tbody.appendChild(row);
+        }
+        if(isTypeStart){
+          const typeCount = items.filter(x => x.level === it.level && x.type === it.type).length;
+          const row = document.createElement('tr');
+          row.className = 'group-row';
+          row.innerHTML = `<td></td><td colspan="7">${escapeHtml(it.type)}（${typeCount}）</td>`;
+          tbody.appendChild(row);
+        }
+
+        if(hasGroup && it.group && it.group !== lastGroup){
+          lastGroup = it.group;
+          const gCount = items.filter(x => x.level === it.level && x.type === it.type && x.group === it.group).length;
+          const gRow = document.createElement('tr');
+          gRow.className = 'subgroup-row';
+          gRow.innerHTML = `<td></td><td colspan="7">${escapeHtml(it.group)}（${gCount}）</td>`;
+          tbody.appendChild(gRow);
+        }
+      }else if(it.status !== lastStatus){
+        lastStatus = it.status;
+        const groupCount = items.filter(x => x.status === it.status).length;
+        const groupRow = document.createElement('tr');
+        groupRow.className = 'group-row';
+        groupRow.innerHTML = `<td></td><td colspan="7">${escapeHtml(label)}（${groupCount}）</td>`;
+        tbody.appendChild(groupRow);
+      }
+    }
+
+    const merged = isLevelType && shouldMergeStations(it.level);
+    const stationCells = merged
+      ? `<td class="station station-merged" colspan="2">${escapeHtml(it.station1||'—')}</td>`
+      : `<td class="station">${escapeHtml(it.station1||'—')}</td><td class="station">${escapeHtml(it.station2||'—')}</td>`;
+
+    const tr = document.createElement('tr');
+    if(it.isNew) tr.classList.add('is-new');
+    else if(it.isEdited) tr.classList.add('is-edited');
+    tr.innerHTML = `
+      <td class="seq">${idx+1}</td>
+      <td class="code">${escapeHtml(it.code)}</td>
+      <td class="name">${escapeHtml(it.name)} ${it.isNew ? '<span class="badge-mark new">NEW</span>' : (it.isEdited ? '<span class="badge-mark edit">異動</span>' : '')}</td>
+      ${stationCells}
+      <td><span class="tag ${tagCls}">${escapeHtml(label)}</span></td>
+      <td class="cnt-col" style="text-align:center;">${COVER_EXCLUDE_CATEGORIES.includes(cat) ? '<span style="color:var(--ink-soft);">—</span>' : `<input type="checkbox" class="cnt-chk" data-id="${it.id}" ${isCounted(cat, it) ? 'checked' : ''} title="勾選＝列入品項數計算">`}</td>
+      <td>
+        <div class="row-actions">
+          <button class="icon-btn edit-row" title="編輯" data-id="${it.id}">✎</button>
+          <button class="icon-btn del del-row" title="刪除" data-id="${it.id}">🗑</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('.edit-row').forEach(b => b.onclick = ()=> openModal('edit', b.dataset.id));
+  tbody.querySelectorAll('.del-row').forEach(b => b.onclick = ()=> deleteItem(b.dataset.id));
+  tbody.querySelectorAll('.cnt-chk').forEach(c => c.onchange = ()=> toggleCountItem(c.dataset.id, c.checked));
+}
+
+function escapeHtml(s){
+  return (s||'').toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function renderAll(){
+  renderSidebar();
+  renderStats();
+  renderTable();
+}
+
+/* ---------- Modal handling ---------- */
+function populateStatusOptions(cat, selected){
+  const opts = statusOptionsFor(cat);
+  const sel = document.getElementById('f_status');
+  sel.innerHTML = opts.map(o => `<option value="${escapeHtml(o)}">${escapeHtml((STATUS_META[o]||{label:o}).label)}</option>`).join('');
+  sel.value = (selected && opts.includes(selected)) ? selected : opts[0];
+}
+
+function populateTypeOptions(cat, levelKey, selectedType){
+  const types = typesForLevel(cat, levelKey);
+  document.getElementById('field_type_wrap').style.display = types.length ? 'block' : 'none';
+  const sel = document.getElementById('f_type');
+  sel.innerHTML = types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  if(selectedType && types.includes(selectedType)) sel.value = selectedType;
+
+  const merge = shouldMergeStations(levelKey);
+  document.getElementById('field_station2_wrap').style.display = merge ? 'none' : 'block';
+  document.getElementById('f_station1_label').textContent = merge ? '說明文字（藥站1/2合併）' : '藥站1';
+}
+
+function openModal(mode, id){
+  state.editingId = mode === 'edit' ? id : null;
+  document.getElementById('formErr').textContent = '';
+
+  const cat = state.activeCat;
+  const isLevelType = categoryMode(cat) === 'level-type';
+  document.getElementById('field_status_normal').style.display = isLevelType ? 'none' : 'block';
+  document.getElementById('field_level_type').style.display = isLevelType ? 'flex' : 'none';
+
+  const hasGroup = categoryHasGroupTag(cat);
+  document.getElementById('field_group_wrap').style.display = hasGroup ? 'block' : 'none';
+
+  let item = null;
+  if(mode === 'edit'){
+    item = (state.items[cat]||[]).find(i => i.id === id);
+  }
+
+  if(isLevelType){
+    document.getElementById('f_level_label').textContent = levelLabelFor(cat);
+    document.getElementById('f_type_label').textContent = typeLabelFor(cat);
+    const levels = levelsFor(cat);
+    const levelSel = document.getElementById('f_level');
+    levelSel.innerHTML = levels.map(l => `<option value="${escapeHtml(l.key)}">${escapeHtml(l.key)}</option>`).join('');
+    const levelKey = item ? item.level : levels[0].key;
+    levelSel.value = levelKey;
+    populateTypeOptions(cat, levelKey, item ? item.type : null);
+  }else{
+    document.getElementById('field_station2_wrap').style.display = 'block';
+    document.getElementById('f_station1_label').textContent = '藥站1';
+  }
+
+  if(mode === 'edit'){
+    document.getElementById('modalTitle').textContent = '編輯品項';
+    document.getElementById('modalSub').textContent = '儲存後將以橘黃色標示為異動品項';
+    document.getElementById('f_code').value = item.code;
+    document.getElementById('f_name').value = item.name;
+    document.getElementById('f_station1').value = item.station1;
+    document.getElementById('f_station2').value = item.station2;
+    if(hasGroup) document.getElementById('f_group').value = item.group || '';
+    if(!isLevelType) populateStatusOptions(cat, item.status);
+  }else{
+    document.getElementById('modalTitle').textContent = '新增品項';
+    document.getElementById('modalSub').textContent = '加入後將自動排序，並以綠色標示';
+    document.getElementById('f_code').value = '';
+    document.getElementById('f_name').value = '';
+    document.getElementById('f_station1').value = '';
+    document.getElementById('f_station2').value = '';
+    if(hasGroup) document.getElementById('f_group').value = '';
+    if(!isLevelType) populateStatusOptions(cat, null);
+  }
+  // 「列入品項數」勾選：編輯時帶入目前設定；新增時依分類標記預設（自製藥水、非藥品品項等預設不勾）
+  document.getElementById('field_count_wrap').style.display = COVER_EXCLUDE_CATEGORIES.includes(cat) ? 'none' : 'block';
+  countTouched = false;
+  document.getElementById('f_count').checked = item ? isCounted(cat, item) : defaultCounted(cat, formItemDraft(cat));
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('f_code').focus();
+}
+
+function closeModal(){
+  document.getElementById('overlay').classList.remove('open');
+  state.editingId = null;
+}
+
+// 藥名若整段都是大寫（例如不小心開著 Caps Lock 輸入），自動把第一個字母以外的部分轉小寫，
+// 例如 "ACLOVIR" -> "Aclovir"；已經是正常大小寫（非整段大寫）的名稱則不會被更動。
+function normalizeAllCapsName(name){
+  if(!name) return name;
+  if(name === name.toUpperCase() && name !== name.toLowerCase()){
+    return name.charAt(0) + name.slice(1).toLowerCase();
+  }
+  return name;
+}
+
+// 目前表單填寫的內容（用來判斷「列入品項數」的預設值）
+let countTouched = false;
+function formItemDraft(cat){
+  const isLT = categoryMode(cat) === 'level-type';
+  return {
+    name: document.getElementById('f_name').value.trim(),
+    status: isLT ? null : document.getElementById('f_status').value,
+    level: isLT ? document.getElementById('f_level').value : null,
+    type: (isLT && levelHasTypes(cat, document.getElementById('f_level').value)) ? document.getElementById('f_type').value : null
+  };
+}
+// 使用者尚未手動勾選前，變更分類標記時自動帶入預設值
+function syncCountDefault(){
+  if(countTouched) return;
+  const cat = state.activeCat;
+  if(COVER_EXCLUDE_CATEGORIES.includes(cat)) return;
+  document.getElementById('f_count').checked = defaultCounted(cat, formItemDraft(cat));
+}
+// 表格上直接勾選／取消「列入品項數」（不算異動，不會標成黃色）
+async function toggleCountItem(id, checked){
+  const cat = state.activeCat;
+  const item = (state.items[cat] || []).find(i => i.id === id);
+  if(!item) return;
+  item.countItem = !!checked;
+  await saveCategory(cat);
+  renderAll();
+  showToast(checked ? '已列入品項數計算' : '已排除於品項數計算');
+}
+
+async function saveModal(){
+  const code = document.getElementById('f_code').value.trim().toUpperCase();
+  const name = normalizeAllCapsName(document.getElementById('f_name').value.trim());
+  let station1 = document.getElementById('f_station1').value.trim();
+  let station2 = document.getElementById('f_station2').value.trim();
+
+  const cat = state.activeCat;
+  const isLevelType = categoryMode(cat) === 'level-type';
+  const status = isLevelType ? null : document.getElementById('f_status').value;
+  const level = isLevelType ? document.getElementById('f_level').value : null;
+  const type = (isLevelType && levelHasTypes(cat, level)) ? document.getElementById('f_type').value : null;
+  const group = categoryHasGroupTag(cat) ? document.getElementById('f_group').value.trim() : '';
+
+  if(isLevelType && shouldMergeStations(level)) station2 = '';
+
+  if(!code || !name){
+    document.getElementById('formErr').textContent = '請填寫藥品四碼與藥品名稱';
+    return;
+  }
+
+  const list = state.items[cat] || (state.items[cat] = []);
+  const countItem = COVER_EXCLUDE_CATEGORIES.includes(cat) ? undefined : document.getElementById('f_count').checked;
+
+  if(state.editingId){
+    const item = list.find(i => i.id === state.editingId);
+    const changed = isLevelType
+      ? (item.code !== code || item.name !== name || item.station1 !== station1 || item.station2 !== station2 || item.level !== level || item.type !== type || (item.group||'') !== group)
+      : (item.code !== code || item.name !== name || item.station1 !== station1 || item.station2 !== station2 || item.status !== status);
+    Object.assign(item, isLevelType ? {code, name, station1, station2, level, type, group} : {code, name, station1, station2, status});
+    if(countItem !== undefined) item.countItem = countItem; // 只改「列入品項數」不算異動
+    let keptNew = false;
+    if(changed){
+      if(item.isNew){
+        // 本期新增的品項若是輸入錯誤而修改，仍維持「新增」，不變成「異動」
+        item.isEdited = false;
+        keptNew = true;
+      }else{
+        item.isEdited = true;
+        item.isNew = false;
+      }
+      item.updatedAt = Date.now();
+    }
+    showToast(keptNew ? '已更新品項（仍維持新增）' : '已更新品項並標示異動');
+  }else{
+    if(list.some(i => i.name === name && i.code === code)){
+      document.getElementById('formErr').textContent = '此藥品四碼與名稱都已存在，可能是重複輸入';
+      return;
+    }
+    const base = {
+      id: uid(), code, name, station1, station2,
+      isNew: true, isEdited: false, updatedAt: Date.now()
+    };
+    if(countItem !== undefined) base.countItem = countItem;
+    list.push(isLevelType ? {...base, level, type, group} : {...base, status});
+    showToast('已新增品項並自動排序');
+  }
+
+  await saveCategory(cat);
+  closeModal();
+  renderAll();
+}
+
+async function deleteItem(id){
+  if(!confirm('確定要刪除此品項嗎？此動作無法復原。')) return;
+  const cat = state.activeCat;
+  const list = state.items[cat] || [];
+  const target = list.find(i => i.id === id);
+  state.items[cat] = list.filter(i => i.id !== id);
+  if(target){
+    const record = {...target, deletedAt: Date.now()};
+    delete record.isNew;
+    delete record.isEdited;
+    if(!state.deletions[cat]) state.deletions[cat] = [];
+    state.deletions[cat].push(record);
+    await saveDeletions(cat);
+  }
+  await saveCategory(cat);
+  renderAll();
+  showToast('已刪除品項');
+}
+
+async function clearMarks(){
+  const cat = state.activeCat;
+  const list = state.items[cat] || [];
+  if(list.length){
+    list.forEach(i => { i.isNew = false; i.isEdited = false; });
+    await saveCategory(cat);
+  }
+  if((state.deletions[cat]||[]).length){
+    state.deletions[cat] = [];
+    await saveDeletions(cat);
+  }
+  renderAll();
+  showToast('已清除本分類的異動標色');
+}
+
+/* ---------- Excel Import ---------- */
+function matchHeader(headers, keywords){
+  for(let i=0;i<headers.length;i++){
+    const h = (headers[i]||'').toString().trim();
+    for(const kw of keywords){
+      if(h.includes(kw)) return i;
+    }
+  }
+  return -1;
+}
+
+function matchHeaderExcluding(headers, keywords, excludeIdx){
+  for(let i=0;i<headers.length;i++){
+    if(i === excludeIdx) continue;
+    const h = (headers[i]||'').toString().trim();
+    for(const kw of keywords){
+      if(h.includes(kw)) return i;
+    }
+  }
+  return -1;
+}
+
+function matchCategory(raw){
+  const s = (raw||'').toString().trim();
+  if(!s) return null;
+  for(const cat of CATEGORIES){
+    if(s.includes(cat) || cat.includes(s)) return cat;
+  }
+  const aliases = {'外用':'外用藥','針劑':'針劑藥','口服':'口服藥','水劑':'藥水','糖漿':'藥水','管制':'管制藥','透析':'透析液','洗腎':'透析液','不計價':'不計價'};
+  for(const key in aliases){
+    if(s.includes(key)) return aliases[key];
+  }
+  return null;
+}
+
+function mapStatusForCategory(cat, raw){
+  const options = statusOptionsFor(cat);
+  const s = (raw||'').toString().trim();
+  if(s){
+    for(const opt of options){
+      if(s.includes(opt)) return opt;
+    }
+    if(options.includes('不再採購') && (s.includes('停售') || s.includes('停購') || s.includes('停產'))) return '不再採購';
+  }
+  return options[0];
+}
+
+// 常見同義寫法，避免「針劑」對不到「注射」而被誤判成清單第一項
+const TYPE_SYNONYMS = {
+  "外用": ["外用","外用藥"],
+  "外用藥": ["外用藥","外用"],
+  "注射": ["注射","針劑","針劑藥","注射藥"],
+  "口服": ["口服","口服藥"],
+  "藥水": ["藥水","水劑"],
+  "貼片": ["貼片"],
+  "急採": ["急採","緊急採購"],
+  "暫代": ["暫代","暫代品項"],
+  "不再採購": ["不再採購","停售","停購","停產"],
+};
+const LEVEL_SYNONYMS = {
+  "4級": ["4級","四級"],
+  "3級": ["3級","三級"],
+  "1&2級": ["1&2級","1、2級","1及2級","1-2級","1與2級","1或2級","1,2級","一二級","1２級","１＆２級"],
+};
+
+function parseLevelType(cat, levelRaw, typeRaw){
+  const levels = levelsFor(cat);
+  const levelText = (levelRaw||'').toString().trim();
+  const typeText = (typeRaw||'').toString().trim();
+  const combined = `${levelText} ${typeText}`;
+
+  let level = null;
+  for(const lvl of levels){
+    const synonyms = LEVEL_SYNONYMS[lvl.key] || [lvl.key];
+    if(synonyms.some(s => levelText.includes(s) || combined.includes(s))){
+      level = lvl.key; break;
+    }
+  }
+  if(!level) level = levels[0].key; // 級別辨識不到時保守預設第一個級別（級別文字歧異情況較少見）
+
+  const types = typesForLevel(cat, level);
+  let type = null;
+  for(const t of types){
+    const synonyms = TYPE_SYNONYMS[t] || [t];
+    if(synonyms.some(s => typeText.includes(s) || combined.includes(s))){
+      type = t; break;
+    }
+  }
+  // 分類文字比對不到時回傳 null，交由呼叫端略過此列並提示，而不是硬塞第一個選項
+  // typeRequired=false 代表這個等級本來就不需要細項（例如旅遊醫學特別門診），type 為 null 是正常情況
+  return {level, type, typeRequired: types.length > 0};
+}
+
+async function handleExcelFile(file){
+  if(!file) return;
+  let wb;
+  try{
+    const buf = await file.arrayBuffer();
+    wb = XLSX.read(buf, {type:'array'});
+  }catch(e){
+    showToast('檔案讀取失敗，請確認格式是否為 Excel/CSV');
+    return;
+  }
+
+  const summary = {added:0, updated:0, skipped:0, unmatchedType:0, categories:new Set()};
+
+  wb.SheetNames.forEach(sheetName=>{
+    const sheet = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+    if(!rows.length) return;
+
+    const headers = rows[0];
+    const idxCode = matchHeader(headers, ['藥品四碼','四碼','藥品代碼','代碼']);
+    const idxName = matchHeader(headers, ['藥品名稱','名稱','品名']);
+    const idxSt1 = matchHeader(headers, ['藥站代碼1','藥站代碼１','藥站1','站碼1','病房']);
+    const idxSt2 = matchHeader(headers, ['藥站代碼2','藥站代碼２','藥站2','站碼2','藥局']);
+    const idxCatCol = matchHeader(headers, ['大分類','品項分類','品項類別']);
+    const sheetCat = matchCategory(sheetName);
+
+    let idxStatus, idxLevel;
+    if(sheetCat && categoryMode(sheetCat) === 'level-type'){
+      // 依此分類實際使用的欄位標籤（例如管制藥是「管制等級」，旅醫類是「分類」）優先比對，
+      // 並排除已被等級欄位用掉的欄位，避免「分類」這種通用字眼在不同分類代表不同意思而撞在一起
+      idxLevel = matchHeader(headers, [levelLabelFor(sheetCat), '管制等級','級別','等級']);
+      idxStatus = matchHeaderExcluding(headers, [typeLabelFor(sheetCat), '細項','類型','劑型','分類標記','分類','狀態','類別'], idxLevel);
+    }else{
+      idxStatus = matchHeader(headers, ['分類','狀態','類別','分類標記']);
+      idxLevel = matchHeader(headers, ['管制等級','級別','等級']);
+    }
+
+    if(idxCode === -1 || idxName === -1) return; // not a recognizable data sheet
+
+    for(let r=1;r<rows.length;r++){
+      const row = rows[r];
+      if(!row || row.every(c => c === '' || c == null)) continue;
+
+      const code = (row[idxCode]||'').toString().trim().toUpperCase();
+      const name = (row[idxName]||'').toString().trim();
+      if(!code || !name){ summary.skipped++; continue; }
+
+      let cat = sheetCat;
+      if(!cat && idxCatCol !== -1) cat = matchCategory(row[idxCatCol]);
+      if(!cat){ summary.skipped++; continue; }
+
+      const station1 = idxSt1 !== -1 ? (row[idxSt1]||'').toString().trim() : '';
+      const station2 = idxSt2 !== -1 ? (row[idxSt2]||'').toString().trim() : '';
+      const isLevelType = categoryMode(cat) === 'level-type';
+
+      let status = null, level = null, type = null;
+      if(isLevelType){
+        const lvlRaw = idxLevel !== -1 ? row[idxLevel] : '';
+        const typeRaw = idxStatus !== -1 ? row[idxStatus] : '';
+        const parsed = parseLevelType(cat, lvlRaw, typeRaw);
+        if(parsed.typeRequired && !parsed.type){
+          summary.skipped++;
+          summary.unmatchedType++;
+          continue; // 分類文字辨識不到，寧可略過也不要誤判分類
+        }
+        level = parsed.level; type = parsed.type;
+      }else{
+        status = mapStatusForCategory(cat, idxStatus !== -1 ? row[idxStatus] : '');
+      }
+
+      if(!state.items[cat]) state.items[cat] = [];
+      const list = state.items[cat];
+      const existing = list.find(i => i.name === name && i.code === code);
+
+      if(existing){
+        const changed = isLevelType
+          ? (existing.station1 !== station1 || existing.station2 !== station2 || existing.level !== level || existing.type !== type)
+          : (existing.station1 !== station1 || existing.station2 !== station2 || existing.status !== status);
+        if(changed){
+          Object.assign(existing, isLevelType ? {station1, station2, level, type} : {station1, station2, status});
+          if(existing.isNew){
+            existing.isEdited = false; // 本期新增的品項被修正時，仍維持「新增」
+          }else{
+            existing.isEdited = true;
+            existing.isNew = false;
+          }
+          existing.updatedAt = Date.now();
+          summary.updated++;
+          summary.categories.add(cat);
+        }
+      }else{
+        const base = {id: uid(), code, name, station1, station2, isNew:true, isEdited:false, updatedAt: Date.now()};
+        list.push(isLevelType ? {...base, level, type} : {...base, status});
+        summary.added++;
+        summary.categories.add(cat);
+      }
+    }
+  });
+
+  for(const cat of summary.categories){
+    await saveCategory(cat);
+  }
+
+  if(summary.categories.size === 0 && summary.skipped === 0){
+    showToast('找不到可辨識的欄位，請確認欄位名稱（藥品四碼／藥品名稱）或參考範本');
+  }else{
+    renderAll();
+    let msg = `匯入完成：新增 ${summary.added} 筆、更新 ${summary.updated} 筆`;
+    if(summary.skipped) msg += `，略過 ${summary.skipped} 筆`;
+    if(summary.unmatchedType) msg += `（其中 ${summary.unmatchedType} 筆因分類文字無法辨識，請確認寫法）`;
+    showToast(msg);
+  }
+}
+
+function downloadTemplate(){
+  const wb = XLSX.utils.book_new();
+  CATEGORIES.forEach(cat=>{
+    let data;
+    if(categoryMode(cat) === 'level-type'){
+      const levels = levelsFor(cat);
+      data = [['藥品四碼','藥品名稱','藥站1','藥站2', levelLabelFor(cat), typeLabelFor(cat)]];
+      levels.forEach((lvl, i)=>{
+        const exampleType = lvl.types.length ? lvl.types[0] : '';
+        data.push([`EX${String(i+1).padStart(2,'0')}`, `範例藥品名稱${i+1}`, '6101', '6201', lvl.key, exampleType]);
+      });
+    }else{
+      const opts = statusOptionsFor(cat);
+      data = [
+        ['藥品四碼','藥品名稱','藥站1','藥站2','分類'],
+        ['VIRL','Aclovir','6102','6202', opts[0]],
+        ['EXP1','ExampleName','6103','6203', opts[1] || opts[0]],
+      ];
+    }
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, cat);
+  });
+  XLSX.writeFile(wb, '藥品品項表_匯入範本.xlsx');
+}
+
+// 下載完整 Excel：新增／異動品項的整列自動反黃（與列印版面「■ 反黃處為新增／異動品項」一致），
+// 改用 ExcelJS 才能真正寫入反黃等樣式（xlsx.js 社群版無法寫入儲存格樣式，詳見列印格式 Excel 的說明）。
+async function downloadFullExcel(){
+  if(typeof ExcelJS === 'undefined'){
+    showToast('Excel 樣式套件載入失敗，請確認網路連線後再試');
+    return;
+  }
+  showToast('正在產生 Excel，請稍候...', true);
+
+  const FONT_HEADER = { name: '標楷體', size: 12, bold: true };
+  const FONT_CELL = { name: '標楷體', size: 12 };
+  const THIN_BOTTOM = { bottom: { style: 'thin' } };
+  const CENTER = { horizontal: 'center', vertical: 'middle' };
+  const FILL_HEADER = { type:'pattern', pattern:'solid', fgColor:{argb:'FFE4F1EE'}, bgColor:{argb:'FFE4F1EE'} };
+  const FILL_HIGHLIGHT = { type:'pattern', pattern:'solid', fgColor:{argb:'FFFFEB99'}, bgColor:{argb:'FFFFEB99'} }; // 與列印版面反黃同色；fgColor/bgColor 都要設，真正的 Excel 對 solid 填滿是讀 bgColor，只設 fgColor 在 Excel 裡會顯示白色（LibreOffice/部分驗證工具雖會正確顯示，但不代表 Excel 也會）
+
+  try{
+    const wb = new ExcelJS.Workbook();
+    CATEGORIES.forEach(cat=>{
+      const items = (state.items[cat] || []).slice().sort((a,b)=> a.name.localeCompare(b.name, 'zh-Hant'));
+      const isLevelType = categoryMode(cat) === 'level-type';
+      const hasGroupCol = isLevelType && categoryHasGroupTag(cat);
+
+      const ws = wb.addWorksheet(cat.length > 31 ? cat.slice(0,31) : cat);
+      const header = isLevelType
+        ? ['藥品四碼','藥品名稱','藥站1','藥站2', levelLabelFor(cat), typeLabelFor(cat), ...(hasGroupCol ? ['群組標籤'] : [])]
+        : ['藥品四碼','藥品名稱','藥站1','藥站2','分類'];
+
+      const headerRow = ws.getRow(1);
+      header.forEach((h, i)=>{
+        const cell = headerRow.getCell(i + 1);
+        cell.value = h;
+        cell.font = FONT_HEADER;
+        cell.alignment = CENTER;
+        cell.fill = FILL_HEADER;
+        cell.border = THIN_BOTTOM;
+      });
+      headerRow.height = 20;
+
+      items.forEach((it, idx)=>{
+        const rowNum = idx + 2;
+        const rowValues = isLevelType
+          ? [it.code, it.name, it.station1||'', it.station2||'', it.level||'', it.type||'', ...(hasGroupCol ? [it.group||''] : [])]
+          : [it.code, it.name, it.station1||'', it.station2||'', it.status||''];
+        const row = ws.getRow(rowNum);
+        const highlight = !!(it.isNew || it.isEdited);
+        rowValues.forEach((v, i)=>{
+          const cell = row.getCell(i + 1);
+          cell.value = v;
+          cell.font = FONT_CELL;
+          cell.alignment = { vertical: 'middle' };
+          cell.border = THIN_BOTTOM;
+          if(highlight) cell.fill = FILL_HIGHLIGHT;
+        });
+      });
+
+      // 欄寬：避開 ExcelJS「寬度剛好等於9會被丟棄」「相鄰欄位同寬第二個會被丟棄」的已知怪癖
+      ws.getColumn(1).width = 10.2; // 藥品四碼
+      ws.getColumn(2).width = 30;   // 藥品名稱
+      ws.getColumn(3).width = 8.4;  // 藥站1
+      ws.getColumn(4).width = 8.6;  // 藥站2
+      ws.getColumn(5).width = 12;   // 分類／管制等級
+      if(isLevelType) ws.getColumn(6).width = 12; // 細項
+      if(hasGroupCol) ws.getColumn(7).width = 12; // 群組標籤
+
+      ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }]; // 凍結標題列
+    });
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `藥品品項表_匯出_${rocDateStr()}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    hideToastNow();
+    showToast('Excel 已下載完成');
+  }catch(e){
+    hideToastNow();
+    showToast('Excel 產生失敗，請稍後再試');
+  }
+}
+
+// 下載「列印格式 Excel」：套用機構範本的版面規格（字型、框線、填色、合併儲存格、
+// 凍結窗格、版面設定），改用 ExcelJS 產生（SheetJS／xlsx.js 的社群版不支援寫入樣式，
+// 實測存檔後字型、填色、框線、對齊、凍結窗格全部會被忽略，只有欄寬/列高/合併儲存格會保留）。
+// 範本中「上季藥委總品項」「急轉常/常轉急/刪除/新增品項數量」等跨季比對欄位，
+// 是需要人工累積歷史資料才能填寫的委員會報告欄位，本功能不會自動產生，需另行人工填入。
+async function downloadPrintStyleExcel(){
+  if(typeof ExcelJS === 'undefined'){
+    showToast('Excel 樣式套件載入失敗，請確認網路連線後再試');
+    return;
+  }
+  showToast('正在產生格式化 Excel，請稍候...', true);
+
+  const originalCat = state.activeCat;
+  const originalSortKey = state.sortKey;
+  const originalSortDir = state.sortDir;
+  const originalSearch = state.search;
+
+  state.search = '';
+  state.sortKey = 'status'; // 跟列印一樣統一用分類分組排序
+  state.sortDir = 1;
+
+  const orgName = document.getElementById('printOrgInput').value.trim();
+  const wb = new ExcelJS.Workbook();
+
+  // ---- 樣式定義（依附件範本量測而來）----
+  const FONT_HEADER = { name: 'Times New Roman', size: 14 };
+  const FONT_SUBHEADER = { name: 'Times New Roman', size: 10 };
+  const FONT_IDX = { name: 'Times New Roman', size: 6 };
+  const FONT_CODE = { name: 'Times New Roman', size: 10 };
+  const FONT_NAME = { name: 'Times New Roman', size: 10 };
+  const FONT_STATION = { name: 'Times New Roman', size: 8 };
+  const FONT_GROUP_LABEL = { name: '標楷體', size: 11 };
+  const FONT_COVER_TITLE = { name: '標楷體', size: 16 };
+  const FONT_COVER_CELL = { name: '標楷體', size: 15 };
+  const THIN_ALL = { top:{style:'thin'}, left:{style:'thin'}, bottom:{style:'thin'}, right:{style:'thin'} };
+  const THIN_BOTTOM = { bottom: { style: 'thin' } };
+  const CENTER = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  const LEFT = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  const FILL_IDX = { type:'pattern', pattern:'solid', fgColor:{argb:'FFD9D9D9'}, bgColor:{argb:'FFD9D9D9'} };
+  const FILL_GROUP = { type:'pattern', pattern:'solid', fgColor:{argb:'FFD9E2F3'}, bgColor:{argb:'FFD9E2F3'} };
+  const FILL_HIGHLIGHT = { type:'pattern', pattern:'solid', fgColor:{argb:'FFFFEB99'}, bgColor:{argb:'FFFFEB99'} }; // 與列印版面「反黃」同色
+
+  function applyPageSetup(ws, landscapeWide){
+    ws.pageSetup = {
+      orientation: 'portrait',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      horizontalCentered: true,
+      margins: { left:0.16, right:0.16, top:0.59, bottom:0.59, header:0.51, footer:0.16 }
+    };
+  }
+
+  // ---- 封面：常備＆急採品項數統計 ----
+  const coverWs = wb.addWorksheet('常備&急採品項數');
+  const coverTitle = (orgName ? orgName + '　' : '') + '院內常備藥品＆急採藥品品項數統計';
+  coverWs.mergeCells('C1:E1');
+  const coverTitleCell = coverWs.getCell('C1');
+  coverTitleCell.value = coverTitle;
+  coverTitleCell.font = FONT_COVER_TITLE;
+  coverTitleCell.alignment = CENTER;
+  coverWs.getRow(1).height = 26;
+
+  const coverHeaderRow = coverWs.getRow(2);
+  coverHeaderRow.getCell(3).value = '';
+  coverHeaderRow.getCell(4).value = '常備品項數';
+  coverHeaderRow.getCell(5).value = '急採品項數';
+  [3,4,5].forEach(c=>{
+    const cell = coverHeaderRow.getCell(c);
+    cell.font = FONT_COVER_CELL;
+    cell.alignment = CENTER;
+    cell.border = THIN_ALL;
+  });
+
+  let coverTotalRegular = 0, coverTotalUrgent = 0;
+  let coverRowIdx = 3;
+  CATEGORIES.filter(cat => !COVER_EXCLUDE_CATEGORIES.includes(cat)).forEach(cat=>{
+    const { regular, urgent } = coverCounts(cat);
+    coverTotalRegular += regular; coverTotalUrgent += urgent;
+    const row = coverWs.getRow(coverRowIdx);
+    row.getCell(3).value = COVER_LABELS[cat] || cat;
+    row.getCell(4).value = regular;
+    row.getCell(5).value = urgent;
+    [3,4,5].forEach(c=>{
+      const cell = row.getCell(c);
+      cell.font = FONT_COVER_CELL;
+      cell.alignment = CENTER;
+      cell.border = THIN_ALL;
+    });
+    coverRowIdx++;
+  });
+  const coverTotalRow = coverWs.getRow(coverRowIdx);
+  coverTotalRow.getCell(3).value = '合　計';
+  coverTotalRow.getCell(4).value = coverTotalRegular;
+  coverTotalRow.getCell(5).value = coverTotalUrgent;
+  [3,4,5].forEach(c=>{
+    const cell = coverTotalRow.getCell(c);
+    cell.font = { ...FONT_COVER_CELL, bold: true };
+    cell.alignment = CENTER;
+    cell.border = THIN_ALL;
+  });
+  coverWs.getColumn(3).width = 14;
+  coverWs.getColumn(4).width = 16;
+  coverWs.getColumn(5).width = 15.8; // 刻意與左欄些微不同，避開 ExcelJS 相鄰欄位同寬會丟失其一的問題
+  applyPageSetup(coverWs);
+
+  // ---- 各分類明細頁 ----
+  CATEGORIES.forEach(cat=>{
+    state.activeCat = cat;
+    const isLevelType = categoryMode(cat) === 'level-type';
+    const items = getFilteredSorted();
+    if(!items.length) return; // 跟列印一樣，沒有品項的分類不產生工作表
+
+    const hasGroup = categoryHasGroupTag(cat);
+    const numCols = printColumnsFor(cat);
+    const colAssignment = printColumnAssignmentFor(cat);
+
+    // 計算序號重置與各種標題列的起始點（跟列印版面用同一套邏輯）
+    let seqCounter = 0;
+    let lastStatus = null, lastLevel = null, lastType = null, lastGroup = null;
+    const processed = items.map(it=>{
+      let isLevelStart = false, isTypeStart = false, isGroupStart = false;
+      if(isLevelType){
+        if(it.level !== lastLevel){ isLevelStart = true; lastLevel = it.level; lastType = null; lastGroup = null; }
+        if(it.type){
+          if(it.type !== lastType){ isTypeStart = true; lastType = it.type; lastGroup = null; seqCounter = 1; }
+          else{ seqCounter += 1; }
+        }else{
+          seqCounter = isLevelStart ? 1 : seqCounter + 1;
+        }
+        if(hasGroup && it.group && it.group !== lastGroup){ isGroupStart = true; lastGroup = it.group; }
+      }else{
+        if(it.status !== lastStatus){ isTypeStart = true; lastStatus = it.status; seqCounter = 1; }
+        else{ seqCounter += 1; }
+      }
+      return { item: it, seq: seqCounter, isLevelStart, isTypeStart, isGroupStart };
+    });
+
+    // 分配到第幾組欄位：Excel 沒有版面高度限制，所以一律用「每個等級固定一欄、往下延伸到底」
+    const excelAssignment = EXCEL_COLUMN_ASSIGNMENT[cat] || colAssignment;
+    let buckets;
+    if(excelAssignment){
+      buckets = Array.from({length: numCols}, ()=> []);
+      processed.forEach(rec=>{
+        const key = isLevelType ? rec.item.level : rec.item.status;
+        const idx = (excelAssignment[key] !== undefined) ? excelAssignment[key] : 0;
+        buckets[Math.min(idx, numCols - 1)].push(rec);
+      });
+    }else{
+      const per = Math.ceil(processed.length / numCols) || 1;
+      buckets = [];
+      for(let i = 0; i < numCols; i++){
+        buckets.push(processed.slice(i * per, (i + 1) * per));
+      }
+    }
+
+    // 把每一組轉成「序號、四碼、藥品名稱、藥站1、藥站2」的列陣列，並記錄哪些列是標題橫幅列
+    function bucketToBlock(bucket){
+      const rows = [];
+      const bannerRowIdx = [];
+      bucket.forEach(rec=>{
+        const it = rec.item;
+        if(isLevelType && rec.isLevelStart){
+          bannerRowIdx.push(rows.length);
+          rows.push({ banner: levelBannerText(cat, items, it.level) });
+        }
+        if(rec.isTypeStart && !(!isLevelType && it.status === '常備')){
+          const title = isLevelType ? it.type : (STATUS_META[it.status] || {label: it.status}).label;
+          bannerRowIdx.push(rows.length);
+          rows.push({ banner: title });
+        }
+        if(rec.isGroupStart){
+          bannerRowIdx.push(rows.length);
+          rows.push({ banner: it.group });
+        }
+        rows.push({ seq: rec.seq, code: it.code, name: it.name, station1: it.station1||'', station2: it.station2||'', highlight: !!(it.isNew || it.isEdited) });
+      });
+      return { rows, bannerRowIdx };
+    }
+
+    const blocks = buckets.map(bucketToBlock);
+    const maxRows = Math.max(0, ...blocks.map(b => b.rows.length));
+    const BLOCK_WIDTH = 5; // 序號、四碼、藥品名稱、藥站1、藥站2（區塊間無間隔欄，與附件範本一致）
+
+    const ws = wb.addWorksheet(cat.length > 31 ? cat.slice(0,31) : cat);
+    const totalCols = blocks.length * BLOCK_WIDTH;
+
+    // 第1列：大標題（機構名稱 分類藥品 製表日期）
+    ws.mergeCells(1, 1, 1, totalCols);
+    const titleCell = ws.getCell(1, 1);
+    titleCell.value = (orgName ? orgName + '　　' : '') + `${cat}藥品　　　製表日期：${rocDateStr()}`;
+    titleCell.font = FONT_HEADER;
+    titleCell.alignment = CENTER;
+    titleCell.border = THIN_BOTTOM;
+    ws.getRow(1).height = 30;
+
+    // 第2列：各區塊子標題（藥品四碼／藥品名稱／藥站）
+    blocks.forEach((b, bi)=>{
+      const base = bi * BLOCK_WIDTH;
+      const headers = ['', '藥品四碼', '藥品名稱', '藥站', ''];
+      headers.forEach((h, ci)=>{
+        const cell = ws.getCell(2, base + ci + 1);
+        cell.value = h;
+        cell.font = FONT_SUBHEADER;
+        cell.alignment = CENTER;
+        cell.border = THIN_BOTTOM;
+      });
+      ws.mergeCells(2, base + 4, 2, base + 5); // 藥站1/藥站2 合併成一欄「藥站」
+    });
+    ws.getRow(2).height = 21;
+
+    // 第3列開始：資料／標題橫幅列
+    for(let r = 0; r < maxRows; r++){
+      const excelRow = r + 3;
+      blocks.forEach((b, bi)=>{
+        const base = bi * BLOCK_WIDTH;
+        const rec = b.rows[r];
+        if(!rec) return;
+        if(rec.banner !== undefined){
+          ws.mergeCells(excelRow, base + 2, excelRow, base + 5); // 合併四碼/名稱/藥站1/藥站2，不含序號欄
+          const cell = ws.getCell(excelRow, base + 2);
+          cell.value = rec.banner;
+          cell.font = FONT_GROUP_LABEL;
+          cell.alignment = CENTER;
+          cell.fill = FILL_GROUP;
+          for(let cc = base + 1; cc <= base + 5; cc++){
+            ws.getCell(excelRow, cc).border = THIN_BOTTOM;
+            ws.getCell(excelRow, cc).fill = FILL_GROUP;
+          }
+        }else{
+          // 新增／異動品項：整列（含序號欄，覆蓋原本的灰底）反黃，與列印版面「■ 反黃處為新增／異動品項」一致
+          const rowFill = rec.highlight ? FILL_HIGHLIGHT : null;
+
+          const idxCell = ws.getCell(excelRow, base + 1);
+          idxCell.value = rec.seq;
+          idxCell.font = FONT_IDX;
+          idxCell.alignment = CENTER;
+          idxCell.fill = rowFill || FILL_IDX;
+          idxCell.border = THIN_BOTTOM;
+
+          const codeCell = ws.getCell(excelRow, base + 2);
+          codeCell.value = rec.code;
+          codeCell.font = FONT_CODE;
+          codeCell.alignment = LEFT;
+          codeCell.border = THIN_BOTTOM;
+          if(rowFill) codeCell.fill = rowFill;
+
+          const nameCell = ws.getCell(excelRow, base + 3);
+          nameCell.value = rec.name;
+          nameCell.font = FONT_NAME;
+          nameCell.alignment = LEFT;
+          nameCell.border = THIN_BOTTOM;
+          if(rowFill) nameCell.fill = rowFill;
+
+          const st1Cell = ws.getCell(excelRow, base + 4);
+          st1Cell.value = rec.station1;
+          st1Cell.font = FONT_STATION;
+          st1Cell.alignment = CENTER;
+          st1Cell.border = THIN_BOTTOM;
+          if(rowFill) st1Cell.fill = rowFill;
+
+          const st2Cell = ws.getCell(excelRow, base + 5);
+          st2Cell.value = rec.station2;
+          st2Cell.font = FONT_STATION;
+          st2Cell.alignment = CENTER;
+          st2Cell.border = THIN_BOTTOM;
+          if(rowFill) st2Cell.fill = rowFill;
+        }
+      });
+    }
+
+    // 欄寬：名稱欄依該分類最長的藥品名稱自動調整，其餘維持固定窄欄
+    const maxNameLen = Math.max(8, ...items.map(it => (it.name||'').length));
+    const nameWidth = Math.min(36, Math.max(14, Math.round(maxNameLen * 0.85)));
+    blocks.forEach((b, bi)=>{
+      const base = bi * BLOCK_WIDTH;
+      // 注意：ExcelJS（目前使用版本）寫入欄寬時有兩個已驗證過的怪異行為：
+      // ①欄寬數值剛好等於整數 9 時會被靜默丟棄（還原成預設寬度）；
+      // ②相鄰欄位寬度完全相同時，第二個欄位的寬度也會被丟棄。
+      // 以下刻意避開「剛好是 9」與「相鄰欄位數值完全相同」，實際視覺效果幾乎無差異。
+      ws.getColumn(base + 1).width = 3.2;     // 序號
+      ws.getColumn(base + 2).width = 9.2;     // 四碼
+      ws.getColumn(base + 3).width = nameWidth; // 藥品名稱
+      ws.getColumn(base + 4).width = 5.4;     // 藥站1
+      ws.getColumn(base + 5).width = 5.6;     // 藥站2
+    });
+
+    ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 2 }]; // 凍結標題列，往下捲動時標題仍可見
+    applyPageSetup(ws);
+  });
+
+  state.activeCat = originalCat;
+  state.sortKey = originalSortKey;
+  state.sortDir = originalSortDir;
+  state.search = originalSearch;
+
+  try{
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `藥品品項表_列印格式_${rocDateStr()}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    hideToastNow();
+    showToast('格式化 Excel 已下載完成');
+  }catch(e){
+    hideToastNow();
+    showToast('Excel 產生失敗，請稍後再試');
+  }
+}
+
+/* ---------- Print (two-column layout) ---------- */
+function rocDateStr(){
+  const d = new Date();
+  const rocYear = d.getFullYear() - 1911;
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${String(rocYear).padStart(3,'0')}${mm}${dd}`;
+}
+
+function nameFontSize(text){
+  const len = (text||'').length;
+  if(len <= 17) return 9.8;
+  if(len <= 22) return 9.2;
+  if(len <= 28) return 8.6;
+  if(len <= 36) return 8;
+  if(len <= 46) return 7.3;
+  return 6.6;
+}
+
+function buildCategoryPagesHtml(breakAfterLast){
+  const cat = state.activeCat;
+  const isLevelType = categoryMode(cat) === 'level-type';
+  const items = getFilteredSorted();
+  const isGrouped = state.sortKey === 'status';
+
+  // Pre-compute sequence numbers (resets at the finest group boundary when grouped)
+  // and group-start flags over the FULL list first, so numbering/section titles stay
+  // correct across pages/columns. Also compute a "weight" = how many physical <tr>
+  // rows this item actually contributes (1 for the data row, +1 for each banner row
+  // that appears immediately above it) so pagination can be based on real row count
+  // instead of just item count — banners otherwise silently push pages past capacity.
+  let seqCounter = 0;
+  let lastStatus = null, lastLevel = null, lastType = null, lastGroup = null;
+  const hasGroup = categoryHasGroupTag(cat);
+  const processed = items.map(it=>{
+    let isLevelStart = false, isTypeStart = false, isGroupStart = false;
+    if(isGrouped){
+      if(isLevelType){
+        if(it.level !== lastLevel){ isLevelStart = true; lastLevel = it.level; lastType = null; lastGroup = null; }
+        if(it.type){
+          if(it.type !== lastType){ isTypeStart = true; lastType = it.type; lastGroup = null; seqCounter = 1; }
+          else{ seqCounter += 1; }
+        }else{
+          // 這個等級沒有細項分類，改在等級邊界重置序號
+          seqCounter = isLevelStart ? 1 : seqCounter + 1;
+        }
+        if(hasGroup && it.group && it.group !== lastGroup){ isGroupStart = true; lastGroup = it.group; }
+      }else{
+        if(it.status !== lastStatus){ isTypeStart = true; lastStatus = it.status; seqCounter = 1; }
+        else{ seqCounter += 1; }
+      }
+    }else{
+      seqCounter += 1;
+    }
+
+    let weight = 1;
+    if(isLevelType && isLevelStart) weight += 1;
+    if(isTypeStart && !(!isLevelType && it.status === '常備')) weight += 1;
+    if(isGroupStart) weight += 1;
+
+    return { item: it, seq: seqCounter, isLevelStart, isTypeStart, isGroupStart, weight };
+  });
+
+  function rowsHtml(list){
+    if(!list.length) return '';
+    let html = '';
+    list.forEach(rec=>{
+      const it = rec.item;
+      const label = itemLabel(it, cat);
+
+      if(isLevelType && rec.isLevelStart){
+        html += `<tr class="print-level"><td></td><td colspan="4">${escapeHtml(levelBannerText(cat, items, it.level))}</td></tr>`;
+      }
+      if(rec.isTypeStart && !(!isLevelType && it.status === '常備')){
+        const title = isLevelType ? it.type : label;
+        html += `<tr class="print-group"><td></td><td colspan="4">${escapeHtml(title)}</td></tr>`;
+      }
+      if(rec.isGroupStart){
+        html += `<tr class="print-subgroup"><td></td><td colspan="4">${escapeHtml(it.group)}</td></tr>`;
+      }
+
+      const fs = nameFontSize(it.name);
+      const rowCls = (it.isNew || it.isEdited) ? ' class="print-highlight"' : '';
+      const merged = isLevelType && shouldMergeStations(it.level);
+      const stationCells = merged
+        ? `<td class="p-station" colspan="2">${escapeHtml(it.station1||'')}</td>`
+        : `<td class="p-station">${escapeHtml(it.station1||'')}</td><td class="p-station">${escapeHtml(it.station2||'')}</td>`;
+      html += `<tr${rowCls}>
+        <td class="p-seq">${rec.seq}</td>
+        <td class="p-code">${escapeHtml(it.code)}</td>
+        <td class="p-name" style="font-size:${fs}px;">${escapeHtml(it.name)}</td>
+        ${stationCells}
+      </tr>`;
+    });
+    return html;
+  }
+
+  function fillerRowsHtml(count){
+    let html = '';
+    for(let i=0;i<count;i++){
+      html += `<tr class="print-filler"><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>`;
+    }
+    return html;
+  }
+
+  function tableHtml(list, fillerCount){
+    return `<table class="print-table">
+      <colgroup>
+        <col style="width:26px">
+        <col style="width:15%">
+        <col style="width:44%">
+        <col style="width:15%">
+        <col style="width:15%">
+      </colgroup>
+      <thead><tr><th>序號</th><th>四碼</th><th>藥品名稱</th><th>藥站1</th><th>藥站2</th></tr></thead>
+      <tbody>${rowsHtml(list)}${fillerRowsHtml(Math.max(0, fillerCount||0))}</tbody>
+    </table>`;
+  }
+
+  const orgName = document.getElementById('printOrgInput').value.trim();
+
+  // Roughly how many physical <tr> rows fit in one printed column's height. Kept
+  // conservative (well under what visually seems to fit) because banner rows and
+  // wrapped long names can still add a bit of extra height beyond a flat row count.
+  // 含標題列共 ROWS_PER_COL+1 列（標題 1 列 + 資料/標題橫幅 ROWS_PER_COL 列），預設 40，
+  // 特定分類（見 rowsPerColFor）可調整為其他值
+  const ROWS_PER_COL = rowsPerColFor(cat);
+  const numCols = printColumnsFor(cat);
+
+  function pageWrap(colsHtml, pageIdx, totalPages, noBreak, titleOverride){
+    const titleText = titleOverride || `${escapeHtml(state.activeCat)}藥品`;
+    const pageSuffix = totalPages > 1 ? `（第 ${pageIdx+1}／${totalPages} 頁）` : '';
+    const lineParts = [];
+    if(orgName) lineParts.push(escapeHtml(orgName));
+    lineParts.push(titleText);
+    lineParts.push(`製表日期：${rocDateStr()}${pageSuffix}`);
+    return `
+      <div class="print-page${noBreak ? '' : ' page-break'}">
+        <div class="print-header">
+          <div class="print-title-line">${lineParts.join('　')}</div>
+          <div class="print-legend-line"><span class="print-legend">■ 反黃處為新增／異動品項</span></div>
+        </div>
+        <div class="print-cols">
+          ${colsHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  // ---- 特定分類：每個等級各自獨立成頁（例如管制藥，級別標題就是頁面標題，
+  // 而不是跟其他級別擠在同一頁的不同欄），比照原始PDF每個級別各自成頁的呈現方式 ----
+  if(PRINT_PAGE_PER_LEVEL.includes(cat) && isLevelType){
+    const levels = levelsFor(cat);
+    const levelBuckets = {};
+    processed.forEach(rec=>{
+      (levelBuckets[rec.item.level] = levelBuckets[rec.item.level] || []).push(rec);
+    });
+    const activeLevels = levels.map(l => l.key).filter(k => levelBuckets[k] && levelBuckets[k].length);
+    const maxWeightPerPage = ROWS_PER_COL * numCols;
+
+    let allPagesHtml = '';
+    activeLevels.forEach((levelKey, levelIdx)=>{
+      const levelItems = levelBuckets[levelKey];
+      const levelPages = [];
+      let cur = [], curW = 0;
+      levelItems.forEach(rec=>{
+        if(cur.length && curW + rec.weight > maxWeightPerPage){
+          levelPages.push(cur); cur = []; curW = 0;
+        }
+        cur.push(rec); curW += rec.weight;
+      });
+      if(cur.length) levelPages.push(cur);
+
+      const suffix = controlLevelStatsSuffix(cat, items, levelKey);
+      const levelTitle = escapeHtml(`${levelKey}${cat}${suffix}`);
+
+      levelPages.forEach((pageItems, pageIdx)=>{
+        const cols = splitFillDown(pageItems, ROWS_PER_COL, numCols);
+        const colsHtml = cols.map(col=>{
+          const w = col.reduce((s,r)=> s + r.weight, 0);
+          return tableHtml(col, ROWS_PER_COL - w);
+        }).join('');
+        const isVeryLastPage = (levelIdx === activeLevels.length - 1) && (pageIdx === levelPages.length - 1);
+        const noBreak = isVeryLastPage && !breakAfterLast;
+        allPagesHtml += pageWrap(colsHtml, pageIdx, levelPages.length, noBreak, levelTitle);
+      });
+    });
+    return allPagesHtml;
+  }
+
+  // ---- 強制換欄起頭 + 自然溢欄延續（例如：疾管局品項及毒物中心一定從新的一欄開始，
+  // 填滿後可以自然溢到下一欄，後面的自製藥品/原料藥接續在溢出的位置，不是被鎖死在固定欄位）----
+  const columnBreaks = printColumnBreaksFor(cat);
+  if(columnBreaks && isLevelType){
+    const virtualCols = [];
+    let currentCol = [], currentWeight = 0, lastLevel = null;
+    const closeColumn = ()=>{
+      virtualCols.push(currentCol);
+      currentCol = [];
+      currentWeight = 0;
+    };
+    processed.forEach(rec=>{
+      const level = rec.item.level;
+      const forcedBreak = columnBreaks.includes(level) && level !== lastLevel && currentCol.length > 0;
+      if(forcedBreak) closeColumn();
+      if(currentCol.length && currentWeight + rec.weight > ROWS_PER_COL) closeColumn();
+      currentCol.push(rec);
+      currentWeight += rec.weight;
+      lastLevel = level;
+    });
+    if(currentCol.length) closeColumn();
+
+    const pages = [];
+    for(let i = 0; i < virtualCols.length; i += numCols){
+      pages.push(virtualCols.slice(i, i + numCols));
+    }
+
+    const pagesHtml = pages.map((pageCols, pageIdx)=>{
+      const colsHtml = pageCols.map(col=>{
+        const w = col.reduce((s,r)=> s + r.weight, 0);
+        return tableHtml(col, ROWS_PER_COL - w);
+      }).join('');
+      const isLastPage = pageIdx === pages.length - 1;
+      const noBreak = isLastPage && !breakAfterLast;
+      return pageWrap(colsHtml, pageIdx, pages.length, noBreak);
+    }).join('');
+    return pagesHtml;
+  }
+
+  // ---- 手動指定欄位分配（例如：管制藥依級別固定分欄、藥水依常備/急採/自製藥水固定分欄）----
+  const colAssignment = printColumnAssignmentFor(cat);
+  if(colAssignment){
+    const buckets = Array.from({length: numCols}, ()=> []);
+    processed.forEach(rec=>{
+      const key = isLevelType ? rec.item.level : rec.item.status;
+      const colIdx = (colAssignment[key] !== undefined) ? colAssignment[key] : 0;
+      buckets[Math.min(colIdx, numCols - 1)].push(rec);
+    });
+
+    function chunkByCapacity(list, capacity){
+      const chunks = [];
+      let current = [], curWeight = 0;
+      list.forEach(rec=>{
+        if(current.length && curWeight + rec.weight > capacity){
+          chunks.push(current);
+          current = [];
+          curWeight = 0;
+        }
+        current.push(rec);
+        curWeight += rec.weight;
+      });
+      chunks.push(current); // 就算是空陣列也保留一欄，讓沒有內容的欄位也能顯示空白格線
+      return chunks;
+    }
+
+    const bucketChunks = buckets.map(b => chunkByCapacity(b, ROWS_PER_COL));
+    const totalPagesRaw = Math.max(1, ...bucketChunks.map(c => c.length));
+
+    // 跳過「所有欄位在這一頁都沒有任何品項」的空白頁（例如某欄提早填完，
+    // 其餘欄位又沒有更多品項可延續，硬湊出的整頁只剩標題列）
+    const pageIndexes = [];
+    for(let p = 0; p < totalPagesRaw; p++){
+      const hasContent = bucketChunks.some(chunks => (chunks[p] || []).length > 0);
+      if(hasContent) pageIndexes.push(p);
+    }
+    const totalPages = pageIndexes.length || 1;
+    if(!pageIndexes.length) pageIndexes.push(0);
+
+    const manualPages = [];
+    pageIndexes.forEach((p, i)=>{
+      const colsHtml = bucketChunks.map(chunks=>{
+        const chunk = chunks[p] || [];
+        const w = chunk.reduce((s,r)=> s + r.weight, 0);
+        return tableHtml(chunk, ROWS_PER_COL - w);
+      }).join('');
+      const isLastPage = i === pageIndexes.length - 1;
+      const noBreak = isLastPage && !breakAfterLast;
+      manualPages.push(pageWrap(colsHtml, i, totalPages, noBreak));
+    });
+    return manualPages.join('');
+  }
+
+  // ---- 一般分類：依實際列數權重自動分頁，並填滿一欄再換下一欄 ----
+  const maxWeightPerPage = ROWS_PER_COL * numCols;
+
+  // 依「實際列數權重」而非單純筆數分頁，含標題列在內，避免頁面實際內容超出可印範圍
+  const pages = [];
+  let currentPage = [];
+  let currentWeight = 0;
+  processed.forEach(rec=>{
+    if(currentPage.length && currentWeight + rec.weight > maxWeightPerPage){
+      pages.push(currentPage);
+      currentPage = [];
+      currentWeight = 0;
+    }
+    currentPage.push(rec);
+    currentWeight += rec.weight;
+  });
+  if(currentPage.length) pages.push(currentPage); // 沒有品項的分類 processed 為空，這裡就不會產生任何頁面
+
+  // 填滿一欄（到達每欄容量上限）才換下一欄，而不是把品項平均分散到每一欄，
+  // 這樣只有最後一欄可能留白，前面的欄位都會盡量填滿。
+  function splitFillDown(list, capacity, parts){
+    const result = [];
+    let idx = 0;
+    for(let p = 0; p < parts; p++){
+      const col = [];
+      let colWeight = 0;
+      while(idx < list.length && colWeight + list[idx].weight <= capacity){
+        col.push(list[idx]);
+        colWeight += list[idx].weight;
+        idx++;
+      }
+      result.push(col);
+    }
+    while(idx < list.length){ result[parts-1].push(list[idx]); idx++; } // 保險：理論上不會發生
+    return result;
+  }
+
+  const pagesHtml = pages.map((pageItems, pageIdx)=>{
+    const cols = splitFillDown(pageItems, ROWS_PER_COL, numCols);
+    const colsHtml = cols.map(col=>{
+      const w = col.reduce((s,r)=> s + r.weight, 0);
+      return tableHtml(col, ROWS_PER_COL - w);
+    }).join('');
+    const isLastPageOfCat = pageIdx === pages.length - 1;
+    const noBreak = isLastPageOfCat && !breakAfterLast;
+    return pageWrap(colsHtml, pageIdx, pages.length, noBreak);
+  }).join('');
+
+  return pagesHtml;
+}
+
+// 移除沒有任何藥品品項的空白列印頁（例如某欄提早填完、其餘欄位又接不上更多品項，
+// 硬湊出只剩標題列的整頁）。只檢查含「品項表格」的頁面，封面頁／異動明細頁不受影響。
+// 同時避免移除後最後一頁仍殘留換頁樣式，導致列印/PDF多出一張空白頁。
+function removeBlankPrintPages(){
+  const container = document.getElementById('printView');
+  if(!container) return;
+  const pages = Array.from(container.children).filter(el => el.classList && el.classList.contains('print-page'));
+  pages.forEach(page=>{
+    const hasDrugTable = page.querySelector('.print-table');
+    if(!hasDrugTable) return; // 非品項頁（封面、異動明細）不處理
+    const hasDataRow = page.querySelector('.print-table td.p-code');
+    if(!hasDataRow) page.remove();
+  });
+  const remaining = Array.from(container.children).filter(el => el.classList && el.classList.contains('print-page'));
+  if(remaining.length){
+    remaining[remaining.length - 1].classList.remove('page-break');
+  }
+}
+
+// 對齊列高：同一頁裡並排的每一欄（表格）彼此比較「相同列位置」的高度，只有某個列位置
+// 因為某一欄的藥品名稱字數較多、自動換行變高時，才把「同一列位置」跨欄的高度統一調整
+// 成一樣高（例如附件截圖紅框示範的情況：只有那一列的三欄一起變高，其餘列維持原本各自
+// 的高度不受影響），避免整頁所有列被迫套用最高值、導致版面被撐爆擠到下一頁。需要先讓
+// 內容處於「有實際版面」的狀態才能量測真實高度，所以量測時會暫時借用 offscreen-render
+// 這個離屏渲染樣式（若呼叫端本來就已經套用了這個樣式，例如下載 PDF 時，量測完不會把它
+// 拿掉，維持原本擷取用的可見狀態）。
+function equalizeRowHeights(){
+  const container = document.getElementById('printView');
+  if(!container) return;
+  const alreadyOffscreen = container.classList.contains('offscreen-render');
+  if(!alreadyOffscreen) container.classList.add('offscreen-render');
+
+  const pages = container.querySelectorAll('.print-page');
+  pages.forEach(page=>{
+    const tables = Array.from(page.querySelectorAll('.print-table'));
+    if(tables.length < 2) return; // 只有單欄時沒有跨欄對齊的需要，維持各列原本高度
+
+    const rowSets = tables.map(t => Array.from(t.querySelectorAll('tbody tr')));
+    // 先清除先前可能量測/設定過的高度，才能重新量到「自然高度」
+    rowSets.forEach(rows => rows.forEach(r => { r.style.height = ''; }));
+
+    const maxRowCount = Math.max(...rowSets.map(rows => rows.length));
+    for(let i = 0; i < maxRowCount; i++){
+      let maxHeight = 0;
+      rowSets.forEach(rows => {
+        if(rows[i]){
+          const h = rows[i].getBoundingClientRect().height;
+          if(h > maxHeight) maxHeight = h;
+        }
+      });
+      if(maxHeight > 0){
+        rowSets.forEach(rows => {
+          if(rows[i]) rows[i].style.height = maxHeight + 'px';
+        });
+      }
+    }
+  });
+
+  if(!alreadyOffscreen) container.classList.remove('offscreen-render');
+}
+
+// 每次要列印/輸出 PDF 前的收尾處理：先移除空白頁，再統一整頁列高。
+function finalizePrintView(){
+  removeBlankPrintPages();
+  equalizeRowHeights();
+}
+
+function printAfterRender(){
+  finalizePrintView();
+  // 內容剛塞入 DOM，瀏覽器可能還沒排版完成；延遲一點再列印，避免第一次列印出現空白頁或版面跑掉
+  setTimeout(()=> window.print(), 80);
+}
+
+function buildPrintView(){
+  const html = buildCategoryPagesHtml(false);
+  if(!html){
+    showToast('此分類目前沒有品項可列印');
+    return;
+  }
+  document.getElementById('printView').innerHTML = html;
+  printAfterRender();
+}
+
+// 組合「封面 + 全部分類品項 + （可選）本次新增／異動／刪除品項明細」的完整列印內容
+function buildFullReportHtml(includeChangeLog){
+  const originalCat = state.activeCat;
+  const originalSortKey = state.sortKey;
+  const originalSortDir = state.sortDir;
+  const originalSearch = state.search;
+
+  state.search = '';
+  state.sortKey = 'status'; // 全部列印時統一用分類分組排序，版面較一致
+  state.sortDir = 1;
+
+  const nonEmptyCats = CATEGORIES.filter(cat => (state.items[cat]||[]).length > 0);
+  let combined = nonEmptyCats.length ? buildCoverPageHtml(true) : ''; // 封面固定放最前面，後面一定接分類頁所以強制換頁
+  nonEmptyCats.forEach((cat, idx)=>{
+    state.activeCat = cat;
+    const isLastCat = idx === nonEmptyCats.length - 1;
+    // 如果後面還會接異動明細頁，最後一個分類的最後一頁也要強制換頁
+    combined += buildCategoryPagesHtml(!isLastCat || includeChangeLog);
+  });
+  if(includeChangeLog && combined){
+    combined += buildChangeLogPageHtml(false); // 明細頁固定放最後，不需再換頁
+  }
+
+  state.activeCat = originalCat;
+  state.sortKey = originalSortKey;
+  state.sortDir = originalSortDir;
+  state.search = originalSearch;
+
+  return combined;
+}
+
+function buildAllCategoriesPrintView(){
+  const combined = buildFullReportHtml(false);
+  if(!combined){
+    showToast('目前沒有任何品項可列印');
+    return;
+  }
+  document.getElementById('printView').innerHTML = combined;
+  printAfterRender();
+}
+
+// 一鍵下載「封面 + 全部分類 + 本次新增／異動／刪除品項明細」的完整 PDF 檔（不經過瀏覽器列印對話框）
+// 一鍵下載「封面 + 全部分類 + 本次新增／異動／刪除品項明細」的完整 PDF 檔。
+// 採用「逐頁擷取」而不是把整份（可能 20~30 頁）內容一次擷取成一張巨大圖片再切頁：
+// 一次擷取整份文件在頁數多時非常吃記憶體與運算資源，容易造成瀏覽器卡住、擷取失敗，
+// 或圖片尺寸超過瀏覽器上限而整個失敗。逐頁處理讓每次只需擷取一頁的大小，穩定很多，
+// 也能即時顯示「第 x / N 頁」的進度，避免使用者誤以為當機。
+async function downloadAllCategoriesPDF(){
+  if(typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined'){
+    showToast('PDF 套件載入失敗，請確認網路連線後再試，或改用「一鍵列印全部分類」在列印視窗選擇另存 PDF');
+    return;
+  }
+  const combined = buildFullReportHtml(true);
+  if(!combined){
+    showToast('目前沒有任何品項可產生 PDF');
+    return;
+  }
+
+  const container = document.getElementById('printView');
+  container.innerHTML = combined;
+  container.classList.add('offscreen-render');
+  finalizePrintView();
+
+  // 等待瀏覽器完成離屏版面渲染，避免擷取到還沒排好版的內容
+  await new Promise(resolve => setTimeout(resolve, 200));
+
+  const pages = Array.from(container.querySelectorAll(':scope > .print-page'));
+  if(!pages.length){
+    container.classList.remove('offscreen-render');
+    showToast('目前沒有任何內容可產生 PDF');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const pageWidthMm = doc.internal.pageSize.getWidth();
+  const pageHeightMm = doc.internal.pageSize.getHeight();
+  const marginMm = 6;
+  const usableWidthMm = pageWidthMm - marginMm * 2;
+
+  let success = 0;
+  let failed = 0;
+
+  try{
+    for(let i = 0; i < pages.length; i++){
+      showToast(`正在產生 PDF：第 ${i + 1} / ${pages.length} 頁...`, true);
+      try{
+        const canvas = await html2canvas(pages[i], {
+          scale: 1.6,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          windowWidth: 794
+        });
+        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        const imgHeightMm = (canvas.height * usableWidthMm) / canvas.width;
+
+        if(i > 0) doc.addPage();
+        // 圖片若超過單頁可用高度，等比縮小塞進一頁，避免內容被裁切
+        const finalHeightMm = Math.min(imgHeightMm, pageHeightMm - marginMm * 2);
+        const finalWidthMm = finalHeightMm === imgHeightMm ? usableWidthMm : (canvas.width * finalHeightMm) / canvas.height;
+        doc.addImage(imgData, 'JPEG', marginMm, marginMm, finalWidthMm, finalHeightMm);
+        success++;
+      }catch(pageErr){
+        failed++;
+        // 單頁擷取失敗就跳過，不讓整份 PDF 因為其中一頁而完全產生失敗
+        if(i > 0 && doc.internal.getNumberOfPages() < i + 1) doc.addPage();
+      }
+      // 讓瀏覽器有機會喘息、更新畫面，避免長時間佔用主執行緒讓分頁看起來像當機
+      await new Promise(resolve => setTimeout(resolve, 30));
+    }
+
+    if(success === 0){
+      hideToastNow();
+      showToast('PDF 產生失敗，請改用「一鍵列印全部分類」在列印視窗選擇另存 PDF');
+    }else{
+      doc.save(`藥品品項表_全分類_${rocDateStr()}.pdf`);
+      hideToastNow();
+      showToast(failed > 0 ? `PDF 已下載完成（${failed} 頁擷取失敗已略過）` : 'PDF 已下載完成');
+    }
+  }catch(e){
+    hideToastNow();
+    showToast('PDF 產生失敗，請改用「一鍵列印全部分類」在列印視窗選擇另存 PDF');
+  }finally{
+    container.classList.remove('offscreen-render');
+  }
+}
+
+/* ---------- Cover summary (封面總覽) ---------- */
+const COVER_LABELS = {
+  "外用藥":"外用", "針劑藥":"針劑", "口服藥":"口服", "藥水":"藥水",
+  "管制藥":"管藥", "透析液":"透析", "不計價":"不計價"
+};
+const COVER_EXCLUDE = ["暫代","不再採購","免費","無個案","非藥品品項","自製藥水"];
+
+// 「列入品項數」預設值：急採一律預設列入；暫代、不再採購、免費、無個案、非藥品品項、自製藥水預設不列入
+function defaultCounted(cat, it){
+  const key = effectiveKey(cat, it);
+  if(key === '急採') return true;
+  return !COVER_EXCLUDE.includes(key);
+}
+// 是否列入品項數：品項若有手動設定（it.countItem）就以手動為準，否則用預設值
+function isCounted(cat, it){
+  if(typeof it.countItem === 'boolean') return it.countItem;
+  return defaultCounted(cat, it);
+}
+
+function coverCounts(cat){
+  const items = state.items[cat] || [];
+  let regular = 0, urgent = 0;
+  items.forEach(it=>{
+    if(!isCounted(cat, it)) return;
+    if(effectiveKey(cat, it) === '急採') urgent++;
+    else regular++;
+  });
+  return {regular, urgent};
+}
+
+function buildCoverPageHtml(breakAfter){
+  const orgName = document.getElementById('printOrgInput').value.trim();
+  let totalRegular = 0, totalUrgent = 0;
+  const rows = CATEGORIES.filter(cat => !COVER_EXCLUDE_CATEGORIES.includes(cat)).map(cat=>{
+    const {regular, urgent} = coverCounts(cat);
+    totalRegular += regular; totalUrgent += urgent;
+    return `<tr><td>${escapeHtml(COVER_LABELS[cat] || cat)}</td><td>${regular}</td><td>${urgent}</td></tr>`;
+  }).join('');
+
+  return `
+    <div class="print-page${breakAfter ? ' page-break' : ''}">
+      <div class="print-header">
+        <div class="print-title-line">${[orgName ? escapeHtml(orgName) : '', '院內常備藥品＆急採藥品品項數統計', `製表日期：${rocDateStr()}`].filter(Boolean).join('　')}</div>
+      </div>
+      <table class="cover-table">
+        <thead><tr><th></th><th>常備品項數</th><th>急採品項數</th></tr></thead>
+        <tbody>
+          ${rows}
+          <tr class="cover-total"><td>合　計</td><td>${totalRegular}</td><td>${totalUrgent}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function buildCoverPrintView(){
+  document.getElementById('printView').innerHTML = buildCoverPageHtml(false);
+  printAfterRender();
+}
+
+/* ---------- Change log (本次異動明細) ---------- */
+function getChangeTime(r){ return (r.it && (r.it.deletedAt || r.it.updatedAt)) || 0; }
+
+function collectChanges(){
+  const rows = [];
+  CATEGORIES.forEach(cat=>{
+    (state.items[cat] || []).forEach(it=>{
+      if(it.isNew) rows.push({cat, it, changeType:'new'});
+      else if(it.isEdited) rows.push({cat, it, changeType:'edited'});
+    });
+    (state.deletions[cat] || []).forEach(it=>{
+      rows.push({cat, it, changeType:'deleted'});
+    });
+  });
+  // 排序方式與品項表相同：先依分類（側邊欄順序），再依分類標記（常備、急採、暫代…；
+  // 管制藥／旅醫類為等級→細項）排列，同標記內依藥品名稱排序
+  const labelRank = r => {
+    const it = r.it;
+    if(categoryMode(r.cat) === 'level-type'){
+      const li = levelsFor(r.cat).map(l => l.key).indexOf(it.level);
+      const ti = typesForLevel(r.cat, it.level).indexOf(it.type);
+      return (li < 0 ? 99 : li) * 100 + (ti < 0 ? 99 : ti);
+    }
+    const si = statusOptionsFor(r.cat).indexOf(it.status);
+    return si < 0 ? 99 : si;
+  };
+  rows.sort((a,b)=>{
+    const ca = CATEGORIES.indexOf(a.cat), cb = CATEGORIES.indexOf(b.cat);
+    if(ca !== cb) return ca - cb;
+    const la = labelRank(a), lb = labelRank(b);
+    if(la !== lb) return la - lb;
+    const byName = (a.it.name || '').localeCompare(b.it.name || '', 'zh-Hant');
+    if(byName !== 0) return byName;
+    return getChangeTime(b) - getChangeTime(a);
+  });
+  return rows;
+}
+
+function changeBadgeHtml(changeType){
+  if(changeType === 'new') return '<span class="badge-mark new">NEW</span>';
+  if(changeType === 'deleted') return '<span class="badge-mark del">刪除</span>';
+  return '<span class="badge-mark edit">異動</span>';
+}
+
+function changeTypeText(changeType){
+  if(changeType === 'new') return '新增';
+  if(changeType === 'deleted') return '刪除';
+  return '異動';
+}
+
+function formatDateTime(ts){
+  if(!ts) return '—';
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// 目前異動明細視窗裡顯示的資料列（供勾選刪除時對應用）
+let changeLogRowsCache = [];
+
+function openChangeLog(){
+  const rows = collectChanges();
+  changeLogRowsCache = rows;
+  document.getElementById('changeLogSub').textContent = rows.length
+    ? `共 ${rows.length} 筆新增／異動／刪除品項，尚未清除標色（可勾選後按「刪除勾選項目」從明細移除）`
+    : '目前沒有新增、異動或刪除中的品項';
+
+  const tbody = document.getElementById('changeLogBody');
+  tbody.innerHTML = rows.length ? rows.map((r, idx)=>{
+    const label = itemLabel(r.it, r.cat);
+    const badge = changeBadgeHtml(r.changeType);
+    return `<tr>
+      <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1; text-align:center;"><input type="checkbox" class="changeLogChk" value="${idx}"></td>
+      <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1;">${escapeHtml(r.cat)}</td>
+      <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1; text-align:center;">${badge}</td>
+      <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1; font-family:var(--mono); font-weight:700; color:var(--teal-deep);">${escapeHtml(r.it.code)}</td>
+      <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1;">${escapeHtml(r.it.name)}</td>
+      <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1; font-family:var(--mono); font-size:12px;">${escapeHtml(r.it.station1||'—')}</td>
+      <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1; font-family:var(--mono); font-size:12px;">${escapeHtml(r.it.station2||'—')}</td>
+      <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1;">${escapeHtml(label)}</td>
+      <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1; font-size:11px; color:var(--ink-soft);">${formatDateTime(getChangeTime(r))}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="9" style="text-align:center; padding:36px; color:var(--ink-soft);">目前沒有異動紀錄</td></tr>`;
+
+  tbody.querySelectorAll('.changeLogChk').forEach(chk => chk.onchange = updateChangeLogSelection);
+  const selectAll = document.getElementById('changeLogSelectAll');
+  selectAll.checked = false;
+  selectAll.indeterminate = false;
+  updateChangeLogSelection();
+
+  document.getElementById('changeLogOverlay').classList.add('open');
+}
+
+// 依目前勾選狀態更新「刪除勾選項目」按鈕與全選框
+function updateChangeLogSelection(){
+  const chks = Array.from(document.querySelectorAll('#changeLogBody .changeLogChk'));
+  const checked = chks.filter(c => c.checked).length;
+  const btn = document.getElementById('changeLogDeleteSelectedBtn');
+  btn.disabled = checked === 0;
+  btn.textContent = checked ? `刪除勾選項目（${checked}）` : '刪除勾選項目';
+  const selectAll = document.getElementById('changeLogSelectAll');
+  selectAll.checked = chks.length > 0 && checked === chks.length;
+  selectAll.indeterminate = checked > 0 && checked < chks.length;
+}
+
+// 手動勾選後，將所選項目「從本次異動明細移除」：
+// 新增／異動的品項 → 清除其新增／異動標記（品項本身仍保留在品項表，也不再反黃）；
+// 刪除紀錄 → 從刪除紀錄中移除。不會刪除品項表裡的任何藥品。
+async function deleteSelectedChanges(){
+  const picked = Array.from(document.querySelectorAll('#changeLogBody .changeLogChk'))
+    .filter(c => c.checked)
+    .map(c => changeLogRowsCache[Number(c.value)])
+    .filter(Boolean);
+  if(!picked.length) return;
+  if(!confirm(`確定要從本次異動明細移除勾選的 ${picked.length} 筆嗎？\n\n（只會移除異動紀錄與反黃標記，不會刪除品項表裡的藥品。）`)) return;
+
+  const dirtyItemCats = new Set();
+  const dirtyDelCats = new Set();
+  picked.forEach(r=>{
+    if(r.changeType === 'deleted'){
+      const list = state.deletions[r.cat] || [];
+      state.deletions[r.cat] = list.filter(d => !(d.id === r.it.id && d.deletedAt === r.it.deletedAt));
+      dirtyDelCats.add(r.cat);
+    }else{
+      const target = (state.items[r.cat] || []).find(i => i.id === r.it.id);
+      if(target){
+        target.isNew = false;
+        target.isEdited = false;
+        dirtyItemCats.add(r.cat);
+      }
+    }
+  });
+  for(const cat of dirtyItemCats) await saveCategory(cat);
+  for(const cat of dirtyDelCats) await saveDeletions(cat);
+
+  renderAll();
+  openChangeLog();
+  showToast(`已從異動明細移除 ${picked.length} 筆`);
+}
+
+function closeChangeLog(){
+  document.getElementById('changeLogOverlay').classList.remove('open');
+}
+
+async function clearAllMarks(){
+  if(!confirm('確定要清除所有分類的新增／異動／刪除標色與紀錄嗎？此動作無法復原，建議在確定這批品項已經印出存查後再執行。')) return;
+  for(const cat of CATEGORIES){
+    const list = state.items[cat] || [];
+    let changedAny = false;
+    list.forEach(i=>{
+      if(i.isNew || i.isEdited){ i.isNew = false; i.isEdited = false; changedAny = true; }
+    });
+    if(changedAny) await saveCategory(cat);
+    if((state.deletions[cat]||[]).length){
+      state.deletions[cat] = [];
+      await saveDeletions(cat);
+    }
+  }
+  try{
+    await storage.set('app:lastArchiveDate', String(Date.now()));
+    updateArchiveDateDisplay();
+  }catch(e){ /* ignore */ }
+  renderAll();
+  closeChangeLog();
+  showToast('已清除全部分類的異動標色，並記錄本次歸檔日期');
+}
+
+function updateArchiveDateDisplay(){
+  const el = document.getElementById('lastArchiveDate');
+  if(!el) return;
+  storage.get('app:lastArchiveDate').then(res=>{
+    if(res && res.value){
+      el.textContent = `上次歸檔：${formatDateTime(Number(res.value))}`;
+    }else{
+      el.textContent = '尚未歸檔過';
+    }
+  }).catch(()=>{ el.textContent = '尚未歸檔過'; });
+}
+
+// 回傳「本次新增／異動／刪除品項明細」的列印頁 HTML（可重複用於單獨列印，或併入下載全分類 PDF）
+function buildChangeLogPageHtml(breakAfter){
+  const rows = collectChanges();
+  const orgName = document.getElementById('printOrgInput').value.trim();
+  const bodyRows = rows.map(r=>{
+    const label = itemLabel(r.it, r.cat);
+    const typeText = changeTypeText(r.changeType);
+    return `<tr>
+      <td>${escapeHtml(r.cat)}</td>
+      <td>${typeText}</td>
+      <td>${escapeHtml(r.it.code)}</td>
+      <td>${escapeHtml(r.it.name)}</td>
+      <td>${escapeHtml(r.it.station1||'—')}</td>
+      <td>${escapeHtml(r.it.station2||'—')}</td>
+      <td>${escapeHtml(label)}</td>
+      <td>${formatDateTime(getChangeTime(r))}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="print-page${breakAfter ? ' page-break' : ''}">
+      <div class="print-header">
+        <div class="print-title-line">${[orgName ? escapeHtml(orgName) : '', '本次新增／異動／刪除品項明細', `製表日期：${rocDateStr()}　　共 ${rows.length} 筆`].filter(Boolean).join('　')}</div>
+      </div>
+      <table class="cover-table changelog-table">
+        <thead><tr><th>分類</th><th>異動</th><th>四碼</th><th>藥品名稱</th><th>藥站1</th><th>藥站2</th><th>分類標記</th><th>異動時間</th></tr></thead>
+        <tbody>${bodyRows || `<tr><td colspan="8" style="text-align:center;padding:16px;">目前沒有異動紀錄</td></tr>`}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function buildChangeLogPrintView(){
+  document.getElementById('printView').innerHTML = buildChangeLogPageHtml(false);
+}
+
+/* ---------- 品項數異動統計（可填寫，格式比照封面總覽）---------- */
+// 與封面總覽相同：不含「旅醫門診、疾管局、自製藥品」分類
+const STATS_CATS = CATEGORIES.filter(cat => !COVER_EXCLUDE_CATEGORIES.includes(cat));
+const STATS_MANUAL_ROWS = [
+  { label:'本季新增品項數量',   reg:'newReg',       urg:'newUrg' },
+  { label:'急採轉常備數量',     reg:'urgToRegReg',  urg:'urgToRegUrg' },
+  { label:'常備轉急採數量',     reg:'regToUrgReg',  urg:'regToUrgUrg' },
+  { label:'無個案轉常備數量',   reg:'ncToReg',      urg:null },
+  { label:'無個案轉急採數量',   reg:null,           urg:'ncToUrg' },
+  { label:'急採轉無個案數量',   reg:null,           urg:'urgToNcUrg' },
+  { label:'刪除品項數量',       reg:'delReg',       urg:'delUrg' },
+];
+
+function defaultChangeStats(){
+  return {
+    prevLabel: '',
+    currLabel: rocDateStr().slice(0, 5), // 預設本季期別：民國年月（例如 11510）
+    prev: {},                            // { 分類: {regular:'', urgent:''} } 上季各分類品項數（手動填寫）
+    manual: { newReg:'', newUrg:'', urgToRegReg:'', urgToRegUrg:'', regToUrgReg:'', regToUrgUrg:'', ncToReg:'', ncToUrg:'', urgToNcUrg:'', delReg:'', delUrg:'' }
+  };
+}
+
+function mergeChangeStats(obj){
+  const d = defaultChangeStats();
+  if(!obj || typeof obj !== 'object') return d;
+  return {
+    prevLabel: obj.prevLabel || '',
+    currLabel: obj.currLabel || d.currLabel,
+    prev: (obj.prev && typeof obj.prev === 'object') ? obj.prev : {},
+    manual: { ...d.manual, ...((obj.manual && typeof obj.manual === 'object') ? obj.manual : {}) }
+  };
+}
+
+async function loadChangeStats(){
+  try{
+    const res = await storage.get('app:changeStats');
+    state.changeStats = mergeChangeStats(res && res.value ? JSON.parse(res.value) : null);
+  }catch(e){
+    state.changeStats = mergeChangeStats(null);
+  }
+}
+
+async function saveChangeStats(){
+  if(!state.changeStats) state.changeStats = mergeChangeStats(null);
+  try{ await storage.set('app:changeStats', JSON.stringify(state.changeStats)); }catch(e){ /* ignore */ }
+  scheduleDataFileWrite();
+}
+
+function statsNum(v){
+  if(v === '' || v == null) return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}
+
+function fmtSigned(n){
+  if(n == null) return '—';
+  return n > 0 ? '+' + n : String(n);
+}
+
+// 依「本次異動明細」自動統計各分類新增／異動／刪除的項目數
+// 常備／急採的判定方式與封面總覽相同：狀態（管制藥／旅醫類為細項）為「急採」算急採，
+// 是否計入由各品項的「列入品項數」決定（預設：暫代、不再採購、免費、無個案、非藥品品項、自製藥水不計入）。
+function autoChangeCounts(){
+  const out = {};
+  CATEGORIES.forEach(cat=>{
+    const isLT = categoryMode(cat) === 'level-type';
+    const keyOf = it => effectiveKey(cat, it);
+    const o = { newReg:0, newUrg:0, edited:0, delReg:0, delUrg:0 };
+    (state.items[cat] || []).forEach(it=>{
+      if(it.isNew){
+        if(isCounted(cat, it)){
+          if(keyOf(it) === '急採') o.newUrg++; else o.newReg++;
+        }
+      }else if(it.isEdited){
+        o.edited++;
+      }
+    });
+    (state.deletions[cat] || []).forEach(it=>{
+      if(!isCounted(cat, it)) return;
+      if(keyOf(it) === '急採') o.delUrg++; else o.delReg++;
+    });
+    out[cat] = o;
+  });
+  return out;
+}
+
+// 計算整張統計表（畫面與列印共用）
+function computeChangeStats(){
+  const cs = state.changeStats;
+  const rows = STATS_CATS.map(cat=>{
+    const cur = coverCounts(cat);
+    const p = cs.prev[cat] || {};
+    const pr = statsNum(p.regular), pu = statsNum(p.urgent);
+    return { cat, cur, pr, pu,
+      dr: pr == null ? null : cur.regular - pr,
+      du: pu == null ? null : cur.urgent - pu };
+  });
+  const curTotReg = rows.reduce((s, r) => s + r.cur.regular, 0);
+  const curTotUrg = rows.reduce((s, r) => s + r.cur.urgent, 0);
+  const hasPrevReg = rows.some(r => r.pr != null);
+  const hasPrevUrg = rows.some(r => r.pu != null);
+  const prTot = rows.reduce((s, r) => s + (r.pr || 0), 0);
+  const puTot = rows.reduce((s, r) => s + (r.pu || 0), 0);
+  const g = k => statsNum(cs.manual[k]) || 0;
+  const calcReg = prTot + g('newReg') + g('urgToRegReg') + g('regToUrgReg') + g('ncToReg') + g('delReg');
+  const calcUrg = puTot + g('newUrg') + g('urgToRegUrg') + g('regToUrgUrg') + g('ncToUrg') + g('urgToNcUrg') + g('delUrg');
+  const auto = autoChangeCounts();
+  const sum = f => STATS_CATS.reduce((s, cat) => s + auto[cat][f], 0);
+  return {
+    rows, curTotReg, curTotUrg, prTot, puTot, hasPrevReg, hasPrevUrg,
+    diffTotReg: hasPrevReg ? curTotReg - prTot : null,
+    diffTotUrg: hasPrevUrg ? curTotUrg - puTot : null,
+    calcReg, calcUrg,
+    recDiffReg: calcReg - curTotReg,
+    recDiffUrg: calcUrg - curTotUrg,
+    auto,
+    autoTotals: { newReg:sum('newReg'), newUrg:sum('newUrg'), edited:sum('edited'), delReg:sum('delReg'), delUrg:sum('delUrg') }
+  };
+}
+
+function statsRecStatusHtml(r){
+  if(r.recDiffReg === 0 && r.recDiffUrg === 0){
+    return '<span class="stats-ok">✓ 計算結果與實際品項數相符</span>';
+  }
+  return `<span class="stats-warn">⚠ 與實際品項數不符：常備相差 ${fmtSigned(r.recDiffReg)}、急採相差 ${fmtSigned(r.recDiffUrg)}（請檢查上季品項數與各項異動數量是否填寫完整）</span>`;
+}
+
+function renderChangeStatsBody(){
+  const cs = state.changeStats;
+  const r = computeChangeStats();
+  const pv = (cat, kind) => { const v = (cs.prev[cat] || {})[kind]; return v == null ? '' : escapeHtml(String(v)); };
+  const mv = k => escapeHtml(String(cs.manual[k] == null ? '' : cs.manual[k]));
+
+  const rowsA = r.rows.map((x, i)=>`
+    <tr>
+      <td class="lbl">${escapeHtml(COVER_LABELS[x.cat] || x.cat)}</td>
+      <td>${x.cur.regular}</td><td>${x.cur.urgent}</td>
+      <td><input type="number" data-stat="prev" data-cat="${escapeHtml(x.cat)}" data-kind="regular" value="${pv(x.cat,'regular')}"></td>
+      <td><input type="number" data-stat="prev" data-cat="${escapeHtml(x.cat)}" data-kind="urgent" value="${pv(x.cat,'urgent')}"></td>
+      <td id="cs-dr-${i}">${fmtSigned(x.dr)}</td><td id="cs-du-${i}">${fmtSigned(x.du)}</td>
+    </tr>`).join('');
+
+  const rowsB = CATEGORIES.map(cat=>{
+    const a = r.auto[cat];
+    const excluded = COVER_EXCLUDE_CATEGORIES.includes(cat);
+    const total = a.newReg + a.newUrg + a.edited + a.delReg + a.delUrg;
+    return `<tr${excluded ? ' class="muted-row"' : ''}>
+      <td class="lbl">${escapeHtml(COVER_LABELS[cat] || cat)}${excluded ? '<div style="font-size:10.5px;font-weight:500;color:var(--ink-soft);">（不計入合計）</div>' : ''}</td>
+      <td>${a.newReg}</td><td>${a.newUrg}</td><td>${a.edited}</td><td>${a.delReg}</td><td>${a.delUrg}</td><td><b>${total}</b></td>
+    </tr>`;
+  }).join('');
+  const t = r.autoTotals;
+  const grandTotal = t.newReg + t.newUrg + t.edited + t.delReg + t.delUrg;
+
+  const rowsC = STATS_MANUAL_ROWS.map(row=>`
+    <tr>
+      <td class="lbl">${row.label}</td>
+      <td>${row.reg ? `<input type="number" data-stat="manual" data-field="${row.reg}" value="${mv(row.reg)}">` : ''}</td>
+      <td>${row.urg ? `<input type="number" data-stat="manual" data-field="${row.urg}" value="${mv(row.urg)}">` : ''}</td>
+    </tr>`).join('');
+
+  document.getElementById('changeStatsBody').innerHTML = `
+    <div class="stats-periods">
+      <label>上季期別 <input type="text" data-stat="label" data-field="prevLabel" value="${escapeHtml(cs.prevLabel)}" placeholder="例：11504"></label>
+      <label>本季期別 <input type="text" data-stat="label" data-field="currLabel" value="${escapeHtml(cs.currLabel)}" placeholder="例：11507"></label>
+    </div>
+
+    <div class="stats-h">① 各分類品項數與異動數（本季品項數由系統自動統計，請填入上季品項數）</div>
+    <table class="stats-table">
+      <thead>
+        <tr><th rowspan="2">分類</th><th colspan="2">本季（自動）</th><th colspan="2">上季（請填寫）</th><th colspan="2">兩季差異數（本季－上季）</th></tr>
+        <tr><th>常備品項數</th><th>急採品項數</th><th>常備品項數</th><th>急採品項數</th><th>常備</th><th>急採</th></tr>
+      </thead>
+      <tbody>
+        ${rowsA}
+        <tr class="total">
+          <td class="lbl">合　計</td>
+          <td>${r.curTotReg}</td><td>${r.curTotUrg}</td>
+          <td id="cs-prtot">${r.hasPrevReg ? r.prTot : '—'}</td><td id="cs-putot">${r.hasPrevUrg ? r.puTot : '—'}</td>
+          <td id="cs-drtot">${fmtSigned(r.diffTotReg)}</td><td id="cs-dutot">${fmtSigned(r.diffTotUrg)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="stats-h">② 本次異動項目數（依「本次異動明細」自動統計，尚未清除標記的項目）</div>
+    <div class="stats-note">新增＝標示 NEW 的品項；異動＝標示異動的品項；刪除＝已從品項表刪除的品項。常備／急採依品項目前的分類標記判定；暫代、不再採購、無個案等不計入常備／急採欄。</div>
+    <table class="stats-table">
+      <thead>
+        <tr><th rowspan="2">分類</th><th colspan="2">新增項目數</th><th rowspan="2">異動項目數</th><th colspan="2">刪除項目數</th><th rowspan="2">異動總項數</th></tr>
+        <tr><th>常備</th><th>急採</th><th>常備</th><th>急採</th></tr>
+      </thead>
+      <tbody>
+        ${rowsB}
+        <tr class="total"><td class="lbl">合　計</td><td>${t.newReg}</td><td>${t.newUrg}</td><td>${t.edited}</td><td>${t.delReg}</td><td>${t.delUrg}</td><td>${grandTotal}</td></tr>
+      </tbody>
+    </table>
+
+    <div class="stats-h">③ 品項數增減核對（請填寫；刪除品項請填負數，急採轉常備：常備填正數、急採填負數；常備轉急採：急採填正數、常備填負數；急採轉無個案：急採填負數）</div>
+    <table class="stats-table" style="max-width:560px;">
+      <thead><tr><th>項目</th><th>常備品項數</th><th>急採品項數</th></tr></thead>
+      <tbody>
+        <tr><td class="lbl">上季合計（${escapeHtml(cs.prevLabel || '上季')}）</td><td id="cs-rec-prev-reg">${r.prTot}</td><td id="cs-rec-prev-urg">${r.puTot}</td></tr>
+        ${rowsC}
+        <tr class="total"><td class="lbl">本季合計（計算值）</td><td id="cs-rec-calc-reg">${r.calcReg}</td><td id="cs-rec-calc-urg">${r.calcUrg}</td></tr>
+        <tr><td class="lbl">本季合計（實際，自動）</td><td id="cs-rec-act-reg">${r.curTotReg}</td><td id="cs-rec-act-urg">${r.curTotUrg}</td></tr>
+      </tbody>
+    </table>
+    <div id="cs-rec-status" style="font-size:12.5px; margin-bottom:6px;">${statsRecStatusHtml(r)}</div>
+  `;
+}
+
+// 輸入時只更新計算結果的儲存格，不重繪整個表單（避免輸入中游標跳掉）
+function updateChangeStatsComputed(){
+  const r = computeChangeStats();
+  const set = (id, txt) => { const el = document.getElementById(id); if(el) el.textContent = txt; };
+  r.rows.forEach((x, i)=>{
+    set('cs-dr-' + i, fmtSigned(x.dr));
+    set('cs-du-' + i, fmtSigned(x.du));
+  });
+  set('cs-prtot', r.hasPrevReg ? r.prTot : '—');
+  set('cs-putot', r.hasPrevUrg ? r.puTot : '—');
+  set('cs-drtot', fmtSigned(r.diffTotReg));
+  set('cs-dutot', fmtSigned(r.diffTotUrg));
+  set('cs-rec-prev-reg', r.prTot);
+  set('cs-rec-prev-urg', r.puTot);
+  set('cs-rec-calc-reg', r.calcReg);
+  set('cs-rec-calc-urg', r.calcUrg);
+  const st = document.getElementById('cs-rec-status');
+  if(st) st.innerHTML = statsRecStatusHtml(r);
+}
+
+function onChangeStatsInput(e){
+  const el = e.target;
+  const kind = el.dataset && el.dataset.stat;
+  if(!kind) return;
+  const cs = state.changeStats;
+  if(kind === 'label'){
+    cs[el.dataset.field] = el.value.trim();
+    if(el.dataset.field === 'prevLabel'){
+      // 上季期別會顯示在③上季合計的標題，輸入完離開欄位時再重繪即可，這裡不處理
+    }
+  }else if(kind === 'prev'){
+    if(!cs.prev[el.dataset.cat]) cs.prev[el.dataset.cat] = { regular:'', urgent:'' };
+    cs.prev[el.dataset.cat][el.dataset.kind] = el.value;
+  }else if(kind === 'manual'){
+    const f = el.dataset.field;
+    const oldSrc = statsNum(cs.manual[f]);
+    cs.manual[f] = el.value;
+    // 互轉項目：填入一邊的數量時，若另一邊還是空白（或是先前自動帶入的相反數），就自動帶入負數
+    // 急採轉常備：常備填正數 → 急採帶負數；常備轉急採：急採填正數 → 常備帶負數
+    const MIRROR = { urgToRegReg:'urgToRegUrg', regToUrgUrg:'regToUrgReg' };
+    if(MIRROR[f]){
+      const tf = MIRROR[f];
+      const curT = statsNum(cs.manual[tf]);
+      const prevMirror = oldSrc == null ? null : -oldSrc;
+      if(curT == null || curT === prevMirror){
+        const nv = statsNum(el.value);
+        cs.manual[tf] = nv == null ? '' : String(-nv);
+        const other = document.querySelector('#changeStatsBody input[data-field="' + tf + '"]');
+        if(other) other.value = cs.manual[tf];
+      }
+    }
+  }
+  updateChangeStatsComputed();
+  saveChangeStats();
+}
+
+function openChangeStats(){
+  if(!state.changeStats) state.changeStats = mergeChangeStats(null);
+  renderChangeStatsBody();
+  document.getElementById('changeStatsOverlay').classList.add('open');
+}
+
+function closeChangeStats(){
+  document.getElementById('changeStatsOverlay').classList.remove('open');
+}
+
+// 依本次異動明細，自動帶入「新增品項數量」與「刪除品項數量」（刪除以負數表示）
+async function autoFillChangeStats(){
+  const r = computeChangeStats();
+  const m = state.changeStats.manual;
+  m.newReg = String(r.autoTotals.newReg);
+  m.newUrg = String(r.autoTotals.newUrg);
+  m.delReg = String(-r.autoTotals.delReg);
+  m.delUrg = String(-r.autoTotals.delUrg);
+  await saveChangeStats();
+  renderChangeStatsBody();
+  showToast('已依異動明細自動帶入新增／刪除數量');
+}
+
+// 列印用頁面（與畫面相同內容，唯讀）
+function buildChangeStatsPageHtml(breakAfter){
+  if(!state.changeStats) state.changeStats = mergeChangeStats(null);
+  const cs = state.changeStats;
+  const r = computeChangeStats();
+  const orgName = document.getElementById('printOrgInput').value.trim();
+  const show = v => (v == null || v === '') ? '' : escapeHtml(String(v));
+  const T = 'style="max-width:none; margin:10px 0 14px; font-size:11px;"';
+  const title = [orgName ? escapeHtml(orgName) : '',
+    `${escapeHtml(cs.currLabel || '本季')}品項數異動統計`,
+    `製表日期：${rocDateStr()}`].filter(Boolean).join('　');
+
+  const rowsA = r.rows.map(x=>`<tr><td>${escapeHtml(COVER_LABELS[x.cat] || x.cat)}</td><td>${x.cur.regular}</td><td>${x.cur.urgent}</td><td>${show(x.pr)}</td><td>${show(x.pu)}</td><td>${fmtSigned(x.dr)}</td><td>${fmtSigned(x.du)}</td></tr>`).join('');
+  const rowsB = CATEGORIES.map(cat=>{
+    const a = r.auto[cat];
+    const ex = COVER_EXCLUDE_CATEGORIES.includes(cat);
+    return `<tr><td>${escapeHtml(COVER_LABELS[cat] || cat)}${ex ? '（不計入合計）' : ''}</td><td>${a.newReg}</td><td>${a.newUrg}</td><td>${a.edited}</td><td>${a.delReg}</td><td>${a.delUrg}</td><td>${a.newReg + a.newUrg + a.edited + a.delReg + a.delUrg}</td></tr>`;
+  }).join('');
+  const t = r.autoTotals;
+  const rowsC = STATS_MANUAL_ROWS.map(row=>`<tr><td>${row.label}</td><td>${row.reg ? show(cs.manual[row.reg]) : ''}</td><td>${row.urg ? show(cs.manual[row.urg]) : ''}</td></tr>`).join('');
+
+  return `
+    <div class="print-page${breakAfter ? ' page-break' : ''}">
+      <div class="print-header"><div class="print-title-line">${title}</div></div>
+      <div style="font-size:12px; font-weight:700;">① 各分類品項數與異動數（上季：${escapeHtml(cs.prevLabel || '—')}　本季：${escapeHtml(cs.currLabel || '—')}）</div>
+      <table class="cover-table" ${T}>
+        <thead>
+          <tr><th rowspan="2">分類</th><th colspan="2">本季</th><th colspan="2">上季</th><th colspan="2">兩季差異數</th></tr>
+          <tr><th>常備品項數</th><th>急採品項數</th><th>常備品項數</th><th>急採品項數</th><th>常備</th><th>急採</th></tr>
+        </thead>
+        <tbody>${rowsA}
+          <tr class="cover-total"><td>合　計</td><td>${r.curTotReg}</td><td>${r.curTotUrg}</td><td>${r.hasPrevReg ? r.prTot : ''}</td><td>${r.hasPrevUrg ? r.puTot : ''}</td><td>${fmtSigned(r.diffTotReg)}</td><td>${fmtSigned(r.diffTotUrg)}</td></tr>
+        </tbody>
+      </table>
+      <div style="font-size:12px; font-weight:700;">② 本次異動項目數（依本次異動明細統計）</div>
+      <table class="cover-table" ${T}>
+        <thead>
+          <tr><th rowspan="2">分類</th><th colspan="2">新增項目數</th><th rowspan="2">異動項目數</th><th colspan="2">刪除項目數</th><th rowspan="2">異動總項數</th></tr>
+          <tr><th>常備</th><th>急採</th><th>常備</th><th>急採</th></tr>
+        </thead>
+        <tbody>${rowsB}
+          <tr class="cover-total"><td>合　計</td><td>${t.newReg}</td><td>${t.newUrg}</td><td>${t.edited}</td><td>${t.delReg}</td><td>${t.delUrg}</td><td>${t.newReg + t.newUrg + t.edited + t.delReg + t.delUrg}</td></tr>
+        </tbody>
+      </table>
+      <div style="font-size:12px; font-weight:700;">③ 品項數增減核對</div>
+      <table class="cover-table" style="max-width:420px; margin:10px 0 14px; font-size:11px;">
+        <thead><tr><th>項目</th><th>常備品項數</th><th>急採品項數</th></tr></thead>
+        <tbody>
+          <tr><td>${escapeHtml(cs.prevLabel || '上季')}合計</td><td>${r.prTot}</td><td>${r.puTot}</td></tr>
+          ${rowsC}
+          <tr class="cover-total"><td>${escapeHtml(cs.currLabel || '本季')}合計（計算值）</td><td>${r.calcReg}</td><td>${r.calcUrg}</td></tr>
+          <tr><td>本季實際品項數</td><td>${r.curTotReg}</td><td>${r.curTotUrg}</td></tr>
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function buildChangeStatsPrintView(){
+  document.getElementById('printView').innerHTML = buildChangeStatsPageHtml(false);
+  printAfterRender();
+}
+
+/* ---------- Init ---------- */
+async function init(){
+  if(runStorageSelfTest()){
+    hideStorageWarning();
+  }else{
+    showStorageWarning();
+  }
+  try{
+    if(navigator.storage && navigator.storage.persist) await navigator.storage.persist();
+  }catch(e){ /* 部分瀏覽器不支援，忽略即可 */ }
+
+  for(const cat of CATEGORIES){
+    state.items[cat] = await loadCategory(cat);
+    state.deletions[cat] = await loadDeletions(cat);
+  }
+  try{
+    const res = await storage.get('app:printOrgName');
+    document.getElementById('printOrgInput').value = res && res.value ? res.value : '';
+  }catch(e){ /* no saved org name yet */ }
+
+  await loadChangeStats();
+
+  // 嘗試自動接回上次使用的實體資料檔（若有連結過），檔案內容會覆蓋瀏覽器內的舊資料
+  await tryRestoreDataFile();
+
+  // 備份提醒：不論目前的自動存檔/儲存狀態為何，每次開啟都固定顯示一次，
+  // 提醒使用者養成定期備份的習慣（此橫幅與上方的儲存異常警示、重新連結提示彼此獨立）。
+  const backupBanner = document.getElementById('backupReminderBanner');
+  if(backupBanner) backupBanner.style.display = 'flex';
+
+  updateArchiveDateDisplay();
+  renderAll();
+}
+
+document.getElementById('printOrgInput').onchange = async (e)=>{
+  try{ await storage.set('app:printOrgName', e.target.value.trim()); }catch(err){}
+  scheduleDataFileWrite();
+};
+
+document.getElementById('addBtn').onclick = ()=> openModal('add');
+document.getElementById('coverBtn').onclick = buildCoverPrintView;
+document.getElementById('printAllBtn').onclick = buildAllCategoriesPrintView;
+document.getElementById('downloadPdfBtn').onclick = downloadAllCategoriesPDF;
+document.getElementById('exportAllBtn').onclick = downloadFullExcel;
+document.getElementById('exportPrintStyleBtn').onclick = downloadPrintStyleExcel;
+document.getElementById('linkFileBtn').onclick = linkNewDataFile;
+document.getElementById('openFileBtn').onclick = openExistingDataFile;
+document.getElementById('reconnectBtn').onclick = reconnectDataFile;
+document.getElementById('backupReminderCloseBtn').onclick = ()=>{
+  document.getElementById('backupReminderBanner').style.display = 'none';
+};
+// 關閉網頁（或重新整理、跳轉其他網址）前，一律強制跳出瀏覽器原生的確認視窗，
+// 提醒使用者「資料可能尚未存檔」，避免不小心關掉視窗。瀏覽器基於安全考量，
+// 不允許自訂視窗文字，一律顯示瀏覽器固定的提示文字（例如「您所做的變更可能不會儲存」），
+// 這是所有瀏覽器的標準行為，無法由網頁自行客製化。
+// 同時盡量搶救：若還有排程中、尚未真正寫入檔案的自動存檔，立刻觸發寫入（盡力而為，
+// 瀏覽器不保證非同步寫入能在頁面關閉前完成，所以仍強烈建議看到提示時選擇「取消」，
+// 手動確認已存檔後再離開）。
+window.addEventListener('beforeunload', (e)=>{
+  if(dataFileHandle){
+    clearTimeout(dataFileWriteTimer);
+    writeDataFileNow();
+  }
+  e.preventDefault();
+  e.returnValue = '';
+  return '';
+});
+
+document.getElementById('backupBtn').onclick = downloadFullBackup;
+document.getElementById('restoreBtn').onclick = ()=> document.getElementById('restoreInput').click();
+document.getElementById('restoreInput').onchange = async (e)=>{
+  const file = e.target.files[0];
+  await restoreFullBackup(file);
+  e.target.value = '';
+};
+document.getElementById('changeLogBtn').onclick = openChangeLog;
+document.getElementById('changeStatsBtn').onclick = openChangeStats;
+document.getElementById('changeStatsCloseBtn').onclick = closeChangeStats;
+document.getElementById('changeStatsOverlay').onclick = (e)=>{ if(e.target.id === 'changeStatsOverlay') closeChangeStats(); };
+document.getElementById('changeStatsAutoFillBtn').onclick = autoFillChangeStats;
+document.getElementById('changeStatsPrintBtn').onclick = buildChangeStatsPrintView;
+document.getElementById('changeStatsBody').addEventListener('input', onChangeStatsInput);
+document.getElementById('changeStatsBody').addEventListener('change', (e)=>{
+  // 期別輸入完成（離開欄位）後重繪，讓③的標題文字同步更新
+  if(e.target.dataset && e.target.dataset.stat === 'label') renderChangeStatsBody();
+});
+document.getElementById('changeLogCloseBtn').onclick = closeChangeLog;
+document.getElementById('changeLogOverlay').onclick = (e)=>{ if(e.target.id === 'changeLogOverlay') closeChangeLog(); };
+document.getElementById('changeLogClearAllBtn').onclick = clearAllMarks;
+document.getElementById('changeLogDeleteSelectedBtn').onclick = deleteSelectedChanges;
+document.getElementById('changeLogSelectAll').onchange = (e)=>{
+  document.querySelectorAll('#changeLogBody .changeLogChk').forEach(chk => { chk.checked = e.target.checked; });
+  updateChangeLogSelection();
+};
+document.getElementById('changeLogPrintBtn').onclick = ()=>{ buildChangeLogPrintView(); printAfterRender(); };
+document.getElementById('f_count').addEventListener('change', ()=>{ countTouched = true; });
+document.getElementById('f_status').addEventListener('change', syncCountDefault);
+document.getElementById('f_type').addEventListener('change', syncCountDefault);
+document.getElementById('f_name').addEventListener('input', syncCountDefault);
+document.getElementById('f_level').onchange = (e)=>{
+  populateTypeOptions(state.activeCat, e.target.value, null);
+  syncCountDefault();
+};
+document.getElementById('f_name').addEventListener('blur', (e)=>{
+  e.target.value = normalizeAllCapsName(e.target.value.trim());
+});
+document.getElementById('cancelBtn').onclick = closeModal;
+document.getElementById('saveBtn').onclick = saveModal;
+document.getElementById('overlay').onclick = (e)=>{ if(e.target.id === 'overlay') closeModal(); };
+document.getElementById('clearMarksBtn').onclick = clearMarks;
+document.getElementById('templateBtn').onclick = downloadTemplate;
+document.getElementById('importBtn').onclick = ()=> document.getElementById('importInput').click();
+document.getElementById('importInput').onchange = async (e)=>{
+  const file = e.target.files[0];
+  await handleExcelFile(file);
+  e.target.value = '';
+};
+document.getElementById('printBtn').onclick = buildPrintView;
+document.getElementById('searchInput').oninput = (e)=>{ state.search = e.target.value; renderTable(); };
+document.querySelectorAll('thead th[data-sort]').forEach(th=>{
+  th.onclick = ()=>{
+    const key = th.dataset.sort;
+    if(state.sortKey === key) state.sortDir *= -1;
+    else { state.sortKey = key; state.sortDir = 1; }
+    renderTable();
+  };
+});
+
+init();
+</script>
+</body>
+</html>
