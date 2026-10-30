@@ -510,9 +510,14 @@
 
 <!-- Change log overlay -->
 <div class="overlay" id="changeLogOverlay">
-  <div class="modal" style="max-width:820px;">
+  <div class="modal" style="max-width:1040px;">
     <h2>本次新增／異動品項明細</h2>
     <div class="sub" id="changeLogSub"></div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 10px;">
+      <input type="text" id="changeLogNoteInput" placeholder="備註，例如：115年10月第3次藥委" style="flex:1; min-width:220px; padding:7px 10px; border:1px solid var(--line); border-radius:8px; font:inherit; font-size:13px;">
+      <button class="btn ghost" id="changeLogNoteApplySelBtn" disabled>備註套用到勾選項目</button>
+      <button class="btn ghost" id="changeLogNoteApplyAllBtn">備註套用到全部</button>
+    </div>
     <div style="max-height:420px; overflow:auto; border:1px solid var(--line); border-radius:8px;">
       <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
         <thead>
@@ -526,6 +531,7 @@
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">藥站2</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">分類標記</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">異動時間</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); min-width:190px;">備註</th>
           </tr>
         </thead>
         <tbody id="changeLogBody"></tbody>
@@ -1544,7 +1550,7 @@ async function clearMarks(){
   const cat = state.activeCat;
   const list = state.items[cat] || [];
   if(list.length){
-    list.forEach(i => { i.isNew = false; i.isEdited = false; });
+    list.forEach(i => { i.isNew = false; i.isEdited = false; delete i.logNote; });
     await saveCategory(cat);
   }
   if((state.deletions[cat]||[]).length){
@@ -2872,10 +2878,12 @@ function openChangeLog(){
       <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1; font-family:var(--mono); font-size:12px;">${escapeHtml(r.it.station2||'—')}</td>
       <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1;">${escapeHtml(label)}</td>
       <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1; font-size:11px; color:var(--ink-soft);">${formatDateTime(getChangeTime(r))}</td>
+      <td style="padding:5px 8px; border-bottom:1px solid #EEF1F1;"><input type="text" class="changeLogNote" data-idx="${idx}" value="${escapeHtml(r.it.logNote || '')}" placeholder="備註（可留白）" style="width:100%; padding:5px 8px; border:1px solid var(--line); border-radius:6px; font:inherit; font-size:12.5px;"></td>
     </tr>`;
-  }).join('') : `<tr><td colspan="9" style="text-align:center; padding:36px; color:var(--ink-soft);">目前沒有異動紀錄</td></tr>`;
+  }).join('') : `<tr><td colspan="10" style="text-align:center; padding:36px; color:var(--ink-soft);">目前沒有異動紀錄</td></tr>`;
 
   tbody.querySelectorAll('.changeLogChk').forEach(chk => chk.onchange = updateChangeLogSelection);
+  tbody.querySelectorAll('.changeLogNote').forEach(inp => inp.onchange = ()=> setChangeNotes([changeLogRowsCache[Number(inp.dataset.idx)]], inp.value, false));
   const selectAll = document.getElementById('changeLogSelectAll');
   selectAll.checked = false;
   selectAll.indeterminate = false;
@@ -2891,9 +2899,32 @@ function updateChangeLogSelection(){
   const btn = document.getElementById('changeLogDeleteSelectedBtn');
   btn.disabled = checked === 0;
   btn.textContent = checked ? `刪除勾選項目（${checked}）` : '刪除勾選項目';
+  const noteBtn = document.getElementById('changeLogNoteApplySelBtn');
+  noteBtn.disabled = checked === 0;
+  noteBtn.textContent = checked ? `備註套用到勾選項目（${checked}）` : '備註套用到勾選項目';
   const selectAll = document.getElementById('changeLogSelectAll');
   selectAll.checked = chks.length > 0 && checked === chks.length;
   selectAll.indeterminate = checked > 0 && checked < chks.length;
+}
+
+// 設定異動明細備註（例如：115年10月第3次藥委）。備註存在品項／刪除紀錄上，列印明細時一併印出。
+async function setChangeNotes(rows, text, refresh){
+  const note = (text || '').trim();
+  const dirtyItemCats = new Set(), dirtyDelCats = new Set();
+  rows.filter(Boolean).forEach(r=>{
+    if(note) r.it.logNote = note; else delete r.it.logNote;
+    (r.changeType === 'deleted' ? dirtyDelCats : dirtyItemCats).add(r.cat);
+  });
+  for(const cat of dirtyItemCats) await saveCategory(cat);
+  for(const cat of dirtyDelCats) await saveDeletions(cat);
+  if(refresh) openChangeLog();
+}
+async function applyNoteToRows(rows, label){
+  const text = document.getElementById('changeLogNoteInput').value;
+  if(!rows.length) return;
+  if(!text.trim() && !confirm(`備註欄是空白，將清除${label}的備註，確定嗎？`)) return;
+  await setChangeNotes(rows, text, true);
+  showToast(text.trim() ? `已將備註套用到${label}` : `已清除${label}的備註`);
 }
 
 // 手動勾選後，將所選項目「從本次異動明細移除」：
@@ -2919,6 +2950,7 @@ async function deleteSelectedChanges(){
       if(target){
         target.isNew = false;
         target.isEdited = false;
+        delete target.logNote;
         dirtyItemCats.add(r.cat);
       }
     }
@@ -2942,6 +2974,7 @@ async function clearAllMarks(){
     let changedAny = false;
     list.forEach(i=>{
       if(i.isNew || i.isEdited){ i.isNew = false; i.isEdited = false; changedAny = true; }
+      if(i.logNote){ delete i.logNote; changedAny = true; }
     });
     if(changedAny) await saveCategory(cat);
     if((state.deletions[cat]||[]).length){
@@ -2986,6 +3019,7 @@ function buildChangeLogPageHtml(breakAfter){
       <td>${escapeHtml(r.it.station2||'—')}</td>
       <td>${escapeHtml(label)}</td>
       <td>${formatDateTime(getChangeTime(r))}</td>
+      <td>${escapeHtml(r.it.logNote || '')}</td>
     </tr>`;
   }).join('');
 
@@ -2995,8 +3029,8 @@ function buildChangeLogPageHtml(breakAfter){
         <div class="print-title-line">${[orgName ? escapeHtml(orgName) : '', '本次新增／異動／刪除品項明細', `製表日期：${rocDateStr()}　　共 ${rows.length} 筆`].filter(Boolean).join('　')}</div>
       </div>
       <table class="cover-table changelog-table">
-        <thead><tr><th>分類</th><th>異動</th><th>四碼</th><th>藥品名稱</th><th>藥站1</th><th>藥站2</th><th>分類標記</th><th>異動時間</th></tr></thead>
-        <tbody>${bodyRows || `<tr><td colspan="8" style="text-align:center;padding:16px;">目前沒有異動紀錄</td></tr>`}</tbody>
+        <thead><tr><th>分類</th><th>異動</th><th>四碼</th><th>藥品名稱</th><th>藥站1</th><th>藥站2</th><th>分類標記</th><th>異動時間</th><th>備註</th></tr></thead>
+        <tbody>${bodyRows || `<tr><td colspan="9" style="text-align:center;padding:16px;">目前沒有異動紀錄</td></tr>`}</tbody>
       </table>
     </div>
   `;
@@ -3452,6 +3486,11 @@ document.getElementById('changeLogSelectAll').onchange = (e)=>{
   document.querySelectorAll('#changeLogBody .changeLogChk').forEach(chk => { chk.checked = e.target.checked; });
   updateChangeLogSelection();
 };
+document.getElementById('changeLogNoteApplySelBtn').onclick = ()=>{
+  const picked = Array.from(document.querySelectorAll('#changeLogBody .changeLogChk')).filter(c => c.checked).map(c => changeLogRowsCache[Number(c.value)]).filter(Boolean);
+  applyNoteToRows(picked, `勾選的 ${picked.length} 筆`);
+};
+document.getElementById('changeLogNoteApplyAllBtn').onclick = ()=> applyNoteToRows(changeLogRowsCache.slice(), `全部 ${changeLogRowsCache.length} 筆`);
 document.getElementById('changeLogPrintBtn').onclick = ()=>{ buildChangeLogPrintView(); printAfterRender(); };
 document.getElementById('f_count').addEventListener('change', ()=>{ countTouched = true; });
 document.getElementById('f_status').addEventListener('change', syncCountDefault);
