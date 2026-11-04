@@ -530,6 +530,7 @@
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">藥站1</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">藥站2</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">分類標記</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);" title="分類標記改過時，顯示改之前的標記（例如：常備改急採 → 異動前為常備）">異動前標記</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">異動時間</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); min-width:190px;">備註</th>
           </tr>
@@ -1493,6 +1494,7 @@ async function saveModal(){
     const changed = isLevelType
       ? (item.code !== code || item.name !== name || item.station1 !== station1 || item.station2 !== station2 || item.level !== level || item.type !== type || (item.group||'') !== group)
       : (item.code !== code || item.name !== name || item.station1 !== station1 || item.station2 !== station2 || item.status !== status);
+    const labelBefore = itemLabel(item, cat); // 異動前的分類標記（例如：常備改急採 → 記下「常備」）
     Object.assign(item, isLevelType ? {code, name, station1, station2, level, type, group} : {code, name, station1, station2, status});
     if(countItem !== undefined) item.countItem = countItem; // 只改「列入品項數」不算異動
     let keptNew = false;
@@ -1504,6 +1506,7 @@ async function saveModal(){
       }else{
         item.isEdited = true;
         item.isNew = false;
+        if(item.prevLabel === undefined) item.prevLabel = labelBefore; // 只記第一次異動前的標記
       }
       item.updatedAt = Date.now();
     }
@@ -1550,7 +1553,7 @@ async function clearMarks(){
   const cat = state.activeCat;
   const list = state.items[cat] || [];
   if(list.length){
-    list.forEach(i => { i.isNew = false; i.isEdited = false; delete i.logNote; });
+    list.forEach(i => { i.isNew = false; i.isEdited = false; delete i.logNote; delete i.prevLabel; });
     await saveCategory(cat);
   }
   if((state.deletions[cat]||[]).length){
@@ -1733,12 +1736,14 @@ async function handleExcelFile(file){
           ? (existing.station1 !== station1 || existing.station2 !== station2 || existing.level !== level || existing.type !== type)
           : (existing.station1 !== station1 || existing.station2 !== station2 || existing.status !== status);
         if(changed){
+          const labelBefore = itemLabel(existing, cat);
           Object.assign(existing, isLevelType ? {station1, station2, level, type} : {station1, station2, status});
           if(existing.isNew){
             existing.isEdited = false; // 本期新增的品項被修正時，仍維持「新增」
           }else{
             existing.isEdited = true;
             existing.isNew = false;
+            if(existing.prevLabel === undefined) existing.prevLabel = labelBefore;
           }
           existing.updatedAt = Date.now();
           summary.updated++;
@@ -2169,6 +2174,64 @@ async function downloadPrintStyleExcel(){
     ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 2 }]; // 凍結標題列，往下捲動時標題仍可見
     applyPageSetup(ws);
   });
+
+  // ---- 異動明細頁（與列印／PDF 相同，固定放在最後一個工作表）----
+  {
+    const changes = collectChanges();
+    const logWs = wb.addWorksheet('異動明細');
+    const LOG_COLS = 9;
+    const FONT_LOG = { name: 'Times New Roman', size: 10 };
+    logWs.mergeCells(1, 1, 1, LOG_COLS);
+    const logTitle = logWs.getCell(1, 1);
+    logTitle.value = [orgName, '本次新增／異動／刪除品項明細', `製表日期：${rocDateStr()}　　共 ${changes.length} 筆`].filter(Boolean).join('　');
+    logTitle.font = FONT_HEADER;
+    logTitle.alignment = CENTER;
+    logWs.getRow(1).height = 24;
+
+    const logHeaders = ['分類','異動','四碼','藥品名稱','藥站1','藥站2','分類標記','異動前標記','備註'];
+    logHeaders.forEach((h, i)=>{
+      const c = logWs.getCell(2, i + 1);
+      c.value = h;
+      c.font = { ...FONT_LOG, bold: true };
+      c.fill = FILL_IDX;
+      c.border = THIN_ALL;
+      c.alignment = CENTER;
+    });
+
+    if(changes.length){
+      changes.forEach((r, ri)=>{
+        const rowNo = 3 + ri;
+        const vals = [
+          r.cat, changeTypeText(r.changeType), r.it.code || '', r.it.name || '',
+          r.it.station1 || '—', r.it.station2 || '—', itemLabel(r.it, r.cat),
+          prevLabelText(r), r.it.logNote || ''
+        ];
+        const centered = [1, 2, 4, 5, 7]; // 異動、四碼、藥站1、藥站2、異動前標記 置中（以 0 起算的欄位）
+        vals.forEach((v, ci)=>{
+          const c = logWs.getCell(rowNo, ci + 1);
+          c.value = v;
+          c.font = FONT_LOG;
+          c.border = THIN_ALL;
+          c.alignment = centered.includes(ci) ? CENTER : LEFT;
+        });
+      });
+    }else{
+      logWs.mergeCells(3, 1, 3, LOG_COLS);
+      const c = logWs.getCell(3, 1);
+      c.value = '目前沒有異動紀錄';
+      c.font = FONT_LOG;
+      c.alignment = CENTER;
+    }
+
+    // 欄寬（避開 ExcelJS「剛好等於9」與「相鄰欄位同寬」會被丟棄的怪癖）
+    const logNameLen = Math.max(8, ...changes.map(r => (r.it.name || '').length));
+    const logNameWidth = Math.min(36, Math.max(16, Math.round(logNameLen * 0.85)));
+    const logNoteLen = Math.max(10, ...changes.map(r => (r.it.logNote || '').length));
+    const logNoteWidth = Math.min(40, Math.max(22, Math.round(logNoteLen * 1.6)));
+    [12.2, 6.4, 9.6, logNameWidth, 7.2, 7.6, 13.4, 10.6, logNoteWidth + 0.2].forEach((w, i)=>{ logWs.getColumn(i + 1).width = w; });
+    logWs.views = [{ state: 'frozen', xSplit: 0, ySplit: 2 }];
+    applyPageSetup(logWs);
+  }
 
   state.activeCat = originalCat;
   state.sortKey = originalSortKey;
@@ -2854,6 +2917,20 @@ function formatDateTime(ts){
   return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// 異動前標記：只有分類標記真的改過（例如常備→急採）才顯示，否則為「—」
+function prevLabelText(r){
+  const cur = itemLabel(r.it, r.cat);
+  return (r.it.prevLabel && r.it.prevLabel !== cur) ? r.it.prevLabel : '—';
+}
+
+// 異動明細只顯示「月/日」
+function formatMonthDay(ts){
+  if(!ts) return '—';
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2,'0');
+  return `${pad(d.getMonth()+1)}/${pad(d.getDate())}`;
+}
+
 // 目前異動明細視窗裡顯示的資料列（供勾選刪除時對應用）
 let changeLogRowsCache = [];
 
@@ -2877,10 +2954,11 @@ function openChangeLog(){
       <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1; font-family:var(--mono); font-size:12px;">${escapeHtml(r.it.station1||'—')}</td>
       <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1; font-family:var(--mono); font-size:12px;">${escapeHtml(r.it.station2||'—')}</td>
       <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1;">${escapeHtml(label)}</td>
-      <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1; font-size:11px; color:var(--ink-soft);">${formatDateTime(getChangeTime(r))}</td>
+      <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1;">${escapeHtml(prevLabelText(r))}</td>
+      <td style="padding:7px 10px; border-bottom:1px solid #EEF1F1; font-size:11px; color:var(--ink-soft);">${formatMonthDay(getChangeTime(r))}</td>
       <td style="padding:5px 8px; border-bottom:1px solid #EEF1F1;"><input type="text" class="changeLogNote" data-idx="${idx}" value="${escapeHtml(r.it.logNote || '')}" placeholder="備註（可留白）" style="width:100%; padding:5px 8px; border:1px solid var(--line); border-radius:6px; font:inherit; font-size:12.5px;"></td>
     </tr>`;
-  }).join('') : `<tr><td colspan="10" style="text-align:center; padding:36px; color:var(--ink-soft);">目前沒有異動紀錄</td></tr>`;
+  }).join('') : `<tr><td colspan="11" style="text-align:center; padding:36px; color:var(--ink-soft);">目前沒有異動紀錄</td></tr>`;
 
   tbody.querySelectorAll('.changeLogChk').forEach(chk => chk.onchange = updateChangeLogSelection);
   tbody.querySelectorAll('.changeLogNote').forEach(inp => inp.onchange = ()=> setChangeNotes([changeLogRowsCache[Number(inp.dataset.idx)]], inp.value, false));
@@ -2951,6 +3029,7 @@ async function deleteSelectedChanges(){
         target.isNew = false;
         target.isEdited = false;
         delete target.logNote;
+        delete target.prevLabel;
         dirtyItemCats.add(r.cat);
       }
     }
@@ -2975,6 +3054,7 @@ async function clearAllMarks(){
     list.forEach(i=>{
       if(i.isNew || i.isEdited){ i.isNew = false; i.isEdited = false; changedAny = true; }
       if(i.logNote){ delete i.logNote; changedAny = true; }
+      if(i.prevLabel !== undefined){ delete i.prevLabel; changedAny = true; }
     });
     if(changedAny) await saveCategory(cat);
     if((state.deletions[cat]||[]).length){
@@ -3018,7 +3098,7 @@ function buildChangeLogPageHtml(breakAfter){
       <td>${escapeHtml(r.it.station1||'—')}</td>
       <td>${escapeHtml(r.it.station2||'—')}</td>
       <td>${escapeHtml(label)}</td>
-      <td>${formatDateTime(getChangeTime(r))}</td>
+      <td>${escapeHtml(prevLabelText(r))}</td>
       <td>${escapeHtml(r.it.logNote || '')}</td>
     </tr>`;
   }).join('');
@@ -3029,7 +3109,7 @@ function buildChangeLogPageHtml(breakAfter){
         <div class="print-title-line">${[orgName ? escapeHtml(orgName) : '', '本次新增／異動／刪除品項明細', `製表日期：${rocDateStr()}　　共 ${rows.length} 筆`].filter(Boolean).join('　')}</div>
       </div>
       <table class="cover-table changelog-table">
-        <thead><tr><th>分類</th><th>異動</th><th>四碼</th><th>藥品名稱</th><th>藥站1</th><th>藥站2</th><th>分類標記</th><th>異動時間</th><th>備註</th></tr></thead>
+        <thead><tr><th>分類</th><th>異動</th><th>四碼</th><th>藥品名稱</th><th>藥站1</th><th>藥站2</th><th>分類標記</th><th>異動前標記</th><th>備註</th></tr></thead>
         <tbody>${bodyRows || `<tr><td colspan="9" style="text-align:center;padding:16px;">目前沒有異動紀錄</td></tr>`}</tbody>
       </table>
     </div>
