@@ -530,7 +530,7 @@
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">藥站1</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">藥站2</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">分類標記</th>
-            <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);" title="分類標記改過時，顯示改之前的標記（例如：常備改急採 → 異動前為常備）">異動前標記</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); min-width:150px;" title="顯示異動前的內容，例如「四碼：5INT」「分類：常備」">異動前標記</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">異動時間</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); min-width:190px;">備註</th>
           </tr>
@@ -1494,7 +1494,7 @@ async function saveModal(){
     const changed = isLevelType
       ? (item.code !== code || item.name !== name || item.station1 !== station1 || item.station2 !== station2 || item.level !== level || item.type !== type || (item.group||'') !== group)
       : (item.code !== code || item.name !== name || item.station1 !== station1 || item.station2 !== station2 || item.status !== status);
-    const labelBefore = itemLabel(item, cat); // 異動前的分類標記（例如：常備改急採 → 記下「常備」）
+    const before = snapshotItem(item, cat); // 異動前的內容（四碼、名稱、藥站、分類標記）
     Object.assign(item, isLevelType ? {code, name, station1, station2, level, type, group} : {code, name, station1, station2, status});
     if(countItem !== undefined) item.countItem = countItem; // 只改「列入品項數」不算異動
     let keptNew = false;
@@ -1506,7 +1506,7 @@ async function saveModal(){
       }else{
         item.isEdited = true;
         item.isNew = false;
-        if(item.prevLabel === undefined) item.prevLabel = labelBefore; // 只記第一次異動前的標記
+        recordPrev(item, cat, before); // 只記每個欄位第一次異動前的值
       }
       item.updatedAt = Date.now();
     }
@@ -1553,7 +1553,7 @@ async function clearMarks(){
   const cat = state.activeCat;
   const list = state.items[cat] || [];
   if(list.length){
-    list.forEach(i => { i.isNew = false; i.isEdited = false; delete i.logNote; delete i.prevLabel; });
+    list.forEach(i => { i.isNew = false; i.isEdited = false; delete i.logNote; delete i.prevLabel; delete i.prev; });
     await saveCategory(cat);
   }
   if((state.deletions[cat]||[]).length){
@@ -1736,14 +1736,14 @@ async function handleExcelFile(file){
           ? (existing.station1 !== station1 || existing.station2 !== station2 || existing.level !== level || existing.type !== type)
           : (existing.station1 !== station1 || existing.station2 !== station2 || existing.status !== status);
         if(changed){
-          const labelBefore = itemLabel(existing, cat);
+          const before = snapshotItem(existing, cat);
           Object.assign(existing, isLevelType ? {station1, station2, level, type} : {station1, station2, status});
           if(existing.isNew){
             existing.isEdited = false; // 本期新增的品項被修正時，仍維持「新增」
           }else{
             existing.isEdited = true;
             existing.isNew = false;
-            if(existing.prevLabel === undefined) existing.prevLabel = labelBefore;
+            recordPrev(existing, cat, before);
           }
           existing.updatedAt = Date.now();
           summary.updated++;
@@ -2206,7 +2206,7 @@ async function downloadPrintStyleExcel(){
           r.it.station1 || '—', r.it.station2 || '—', itemLabel(r.it, r.cat),
           prevLabelText(r), r.it.logNote || ''
         ];
-        const centered = [1, 2, 4, 5, 7]; // 異動、四碼、藥站1、藥站2、異動前標記 置中（以 0 起算的欄位）
+        const centered = [1, 2, 4, 5]; // 異動、四碼、藥站1、藥站2 置中（以 0 起算的欄位）
         vals.forEach((v, ci)=>{
           const c = logWs.getCell(rowNo, ci + 1);
           c.value = v;
@@ -2228,7 +2228,7 @@ async function downloadPrintStyleExcel(){
     const logNameWidth = Math.min(36, Math.max(16, Math.round(logNameLen * 0.85)));
     const logNoteLen = Math.max(10, ...changes.map(r => (r.it.logNote || '').length));
     const logNoteWidth = Math.min(40, Math.max(22, Math.round(logNoteLen * 1.6)));
-    [12.2, 6.4, 9.6, logNameWidth, 7.2, 7.6, 13.4, 10.6, logNoteWidth + 0.2].forEach((w, i)=>{ logWs.getColumn(i + 1).width = w; });
+    [12.2, 6.4, 9.6, logNameWidth, 7.2, 7.6, 13.4, 24.4, logNoteWidth + 0.2].forEach((w, i)=>{ logWs.getColumn(i + 1).width = w; });
     logWs.views = [{ state: 'frozen', xSplit: 0, ySplit: 2 }];
     applyPageSetup(logWs);
   }
@@ -2917,10 +2917,31 @@ function formatDateTime(ts){
   return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// 異動前標記：只有分類標記真的改過（例如常備→急採）才顯示，否則為「—」
+// ---- 異動前內容：記下四碼、名稱、藥站、分類標記「第一次異動前」的值 ----
+function snapshotItem(it, cat){
+  return { code: it.code || '', name: it.name || '', station1: it.station1 || '', station2: it.station2 || '', label: itemLabel(it, cat) };
+}
+// 異動後呼叫：把「有被改到、且還沒記錄過」的欄位的舊值存進 it.prev
+function recordPrev(it, cat, before){
+  const after = snapshotItem(it, cat);
+  if(!it.prev) it.prev = {};
+  Object.keys(before).forEach(k=>{
+    if(before[k] !== after[k] && it.prev[k] === undefined) it.prev[k] = before[k];
+  });
+  if(!Object.keys(it.prev).length) delete it.prev;
+}
+// 異動明細「異動前標記」欄：列出目前與異動前不同的欄位，例如「四碼：5INT」「分類：常備」；沒有差異顯示「—」
 function prevLabelText(r){
-  const cur = itemLabel(r.it, r.cat);
-  return (r.it.prevLabel && r.it.prevLabel !== cur) ? r.it.prevLabel : '—';
+  const it = r.it;
+  const prev = Object.assign({}, it.prev || {});
+  if(prev.label === undefined && it.prevLabel !== undefined) prev.label = it.prevLabel; // 舊版資料相容
+  const cur = snapshotItem(it, r.cat);
+  const mergedSt = categoryMode(r.cat) === 'level-type' && shouldMergeStations(it.level);
+  const parts = [];
+  [['code','四碼'],['name','名稱'],['station1', mergedSt ? '說明文字' : '藥站1'],['station2','藥站2'],['label','分類']].forEach(([k, t])=>{
+    if(prev[k] !== undefined && (prev[k] || '') !== (cur[k] || '')) parts.push(`${t}：${prev[k] || '—'}`);
+  });
+  return parts.length ? parts.join('；') : '—';
 }
 
 // 異動明細只顯示「月/日」
@@ -3030,6 +3051,7 @@ async function deleteSelectedChanges(){
         target.isEdited = false;
         delete target.logNote;
         delete target.prevLabel;
+        delete target.prev;
         dirtyItemCats.add(r.cat);
       }
     }
@@ -3054,7 +3076,7 @@ async function clearAllMarks(){
     list.forEach(i=>{
       if(i.isNew || i.isEdited){ i.isNew = false; i.isEdited = false; changedAny = true; }
       if(i.logNote){ delete i.logNote; changedAny = true; }
-      if(i.prevLabel !== undefined){ delete i.prevLabel; changedAny = true; }
+      if(i.prevLabel !== undefined || i.prev !== undefined){ delete i.prevLabel; delete i.prev; changedAny = true; }
     });
     if(changedAny) await saveCategory(cat);
     if((state.deletions[cat]||[]).length){
