@@ -1913,7 +1913,7 @@ async function downloadPrintStyleExcel(){
   const FONT_SUBHEADER = { name: 'Times New Roman', size: 10 };
   const FONT_IDX = { name: 'Times New Roman', size: 6 };
   const FONT_CODE = { name: 'Times New Roman', size: 10 };
-  const FONT_NAME = { name: 'Times New Roman', size: 10 };
+  const FONT_NAME = { name: 'Times New Roman', size: 11 }; // 藥品名稱字體（原 10 → 11）
   const FONT_STATION = { name: 'Times New Roman', size: 8 };
   const FONT_GROUP_LABEL = { name: '標楷體', size: 11 };
   const FONT_COVER_TITLE = { name: '標楷體', size: 16 };
@@ -2156,8 +2156,10 @@ async function downloadPrintStyleExcel(){
     }
 
     // 欄寬：名稱欄依該分類最長的藥品名稱自動調整，其餘維持固定窄欄
+    // 名稱字體放大後（10→11），欄寬等比例放大，避免名稱被截斷
+    const NAME_CHAR_W = 0.85 * 1.1;
     const maxNameLen = Math.max(8, ...items.map(it => (it.name||'').length));
-    const nameWidth = Math.min(36, Math.max(14, Math.round(maxNameLen * 0.85)));
+    const nameWidth = Math.min(40, Math.max(15, Math.round(maxNameLen * NAME_CHAR_W)));
     blocks.forEach((b, bi)=>{
       const base = bi * BLOCK_WIDTH;
       // 注意：ExcelJS（目前使用版本）寫入欄寬時有兩個已驗證過的怪異行為：
@@ -2170,6 +2172,17 @@ async function downloadPrintStyleExcel(){
       ws.getColumn(base + 4).width = 5.4;     // 藥站1
       ws.getColumn(base + 5).width = 5.6;     // 藥站2
     });
+
+    // 資料列列高（原為預設高度，略微加高）；名稱超過欄寬而需換行的列加倍，避免文字被截掉
+    const ROW_H = 19;
+    for(let r = 0; r < maxRows; r++){
+      let lines = 1;
+      blocks.forEach(b=>{
+        const rec = b.rows[r];
+        if(rec && rec.banner === undefined && (rec.name || '').length * NAME_CHAR_W > nameWidth + 0.5) lines = 2;
+      });
+      ws.getRow(r + 3).height = ROW_H * lines - (lines > 1 ? 4 : 0);
+    }
 
     ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 2 }]; // 凍結標題列，往下捲動時標題仍可見
     applyPageSetup(ws);
