@@ -530,7 +530,7 @@
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">藥站1</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">藥站2</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">分類標記</th>
-            <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); min-width:150px;" title="顯示異動前的內容，例如「四碼：5INT」「分類：常備」">異動前標記</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); min-width:150px;" title="顯示異動前的內容，例如：舊四碼、舊名稱、舊分類標記（常備改急採即顯示「常備」）">異動前標記</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line);">異動時間</th>
             <th style="padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); min-width:190px;">備註</th>
           </tr>
@@ -2930,7 +2930,7 @@ function recordPrev(it, cat, before){
   });
   if(!Object.keys(it.prev).length) delete it.prev;
 }
-// 異動明細「異動前標記」欄：列出目前與異動前不同的欄位，例如「四碼：5INT」「分類：常備」；沒有差異顯示「—」
+// 異動明細「異動前標記」欄：只列出有改到的欄位的舊值（例如「5INT」「常備」「Trolovol」）；沒有差異顯示「—」
 function prevLabelText(r){
   const it = r.it;
   const prev = Object.assign({}, it.prev || {});
@@ -2939,7 +2939,7 @@ function prevLabelText(r){
   const mergedSt = categoryMode(r.cat) === 'level-type' && shouldMergeStations(it.level);
   const parts = [];
   [['code','四碼'],['name','名稱'],['station1', mergedSt ? '說明文字' : '藥站1'],['station2','藥站2'],['label','分類']].forEach(([k, t])=>{
-    if(prev[k] !== undefined && (prev[k] || '') !== (cur[k] || '')) parts.push(`${t}：${prev[k] || '—'}`);
+    if(prev[k] !== undefined && (prev[k] || '') !== (cur[k] || '')) parts.push(prev[k] || '—'); // 只列舊值，不加欄位名稱
   });
   return parts.length ? parts.join('；') : '—';
 }
