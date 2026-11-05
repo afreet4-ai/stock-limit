@@ -2874,8 +2874,9 @@ function collectChanges(){
       rows.push({cat, it, changeType:'deleted'});
     });
   });
-  // 排序方式與品項表相同：先依分類（側邊欄順序），再依分類標記（常備、急採、暫代…；
-  // 管制藥／旅醫類為等級→細項）排列，同標記內依藥品名稱排序
+  // 排序：1.分類（側邊欄順序）→ 2.異動（新增→異動→刪除）→ 3.分類標記（常備、急採、暫代…；
+  // 管制藥／旅醫類為等級→細項）→ 同標記內依藥品名稱排序
+  const typeRank = r => ({new:0, edited:1, deleted:2})[r.changeType] ?? 1;
   const labelRank = r => {
     const it = r.it;
     if(categoryMode(r.cat) === 'level-type'){
@@ -2889,6 +2890,8 @@ function collectChanges(){
   rows.sort((a,b)=>{
     const ca = CATEGORIES.indexOf(a.cat), cb = CATEGORIES.indexOf(b.cat);
     if(ca !== cb) return ca - cb;
+    const ta = typeRank(a), tb = typeRank(b);
+    if(ta !== tb) return ta - tb;
     const la = labelRank(a), lb = labelRank(b);
     if(la !== lb) return la - lb;
     const byName = (a.it.name || '').localeCompare(b.it.name || '', 'zh-Hant');
