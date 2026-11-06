@@ -268,7 +268,9 @@
   .print-table td.p-seq{ font-weight:600; color:#444; }
   .print-table td.p-code{ white-space:nowrap; }
   .print-table td.p-station{ white-space:nowrap; }
-  .print-table td.p-name{ white-space:normal; word-break:break-word; line-height:1.25; }
+  .print-table td.p-name{ white-space:normal; word-break:break-word; line-height:1.25; font-size:10.8px; } /* 藥品名稱字體加大（原 9.8px） */
+  /* 資料列上下留白加大 → 列高略高；實際採用值由 fitPrintDensity() 依整頁高度自動決定（放不下就退回原本的 4px） */
+  .print-table tbody td{ padding-top:var(--print-pad, 5px); padding-bottom:var(--print-pad, 5px); }
   .print-table tr.print-group td{
     background:#dfe5e4; font-weight:700; text-align:center; letter-spacing:0.5px;
   }
@@ -2089,7 +2091,7 @@ async function downloadPrintStyleExcel(){
         cell.value = h;
         cell.font = FONT_SUBHEADER;
         cell.alignment = CENTER;
-        cell.border = THIN_BOTTOM;
+        cell.border = THIN_ALL;
       });
       ws.mergeCells(2, base + 4, 2, base + 5); // 藥站1/藥站2 合併成一欄「藥站」
     });
@@ -2110,7 +2112,7 @@ async function downloadPrintStyleExcel(){
           cell.alignment = CENTER;
           cell.fill = FILL_GROUP;
           for(let cc = base + 1; cc <= base + 5; cc++){
-            ws.getCell(excelRow, cc).border = THIN_BOTTOM;
+            ws.getCell(excelRow, cc).border = THIN_ALL;
             ws.getCell(excelRow, cc).fill = FILL_GROUP;
           }
         }else{
@@ -2122,34 +2124,34 @@ async function downloadPrintStyleExcel(){
           idxCell.font = FONT_IDX;
           idxCell.alignment = CENTER;
           idxCell.fill = rowFill || FILL_IDX;
-          idxCell.border = THIN_BOTTOM;
+          idxCell.border = THIN_ALL;
 
           const codeCell = ws.getCell(excelRow, base + 2);
           codeCell.value = rec.code;
           codeCell.font = FONT_CODE;
           codeCell.alignment = LEFT;
-          codeCell.border = THIN_BOTTOM;
+          codeCell.border = THIN_ALL;
           if(rowFill) codeCell.fill = rowFill;
 
           const nameCell = ws.getCell(excelRow, base + 3);
           nameCell.value = rec.name;
           nameCell.font = FONT_NAME;
           nameCell.alignment = LEFT;
-          nameCell.border = THIN_BOTTOM;
+          nameCell.border = THIN_ALL;
           if(rowFill) nameCell.fill = rowFill;
 
           const st1Cell = ws.getCell(excelRow, base + 4);
           st1Cell.value = rec.station1;
           st1Cell.font = FONT_STATION;
           st1Cell.alignment = CENTER;
-          st1Cell.border = THIN_BOTTOM;
+          st1Cell.border = THIN_ALL;
           if(rowFill) st1Cell.fill = rowFill;
 
           const st2Cell = ws.getCell(excelRow, base + 5);
           st2Cell.value = rec.station2;
           st2Cell.font = FONT_STATION;
           st2Cell.alignment = CENTER;
-          st2Cell.border = THIN_BOTTOM;
+          st2Cell.border = THIN_ALL;
           if(rowFill) st2Cell.fill = rowFill;
         }
       });
@@ -2664,9 +2666,33 @@ function equalizeRowHeights(){
   if(!alreadyOffscreen) container.classList.remove('offscreen-render');
 }
 
-// 每次要列印/輸出 PDF 前的收尾處理：先移除空白頁，再統一整頁列高。
+// 列高自動檢查：優先使用較高的列高（上下留白 5px），若會讓任何一頁超過 A4 可用高度，
+// 就依序退到 4.5px、4px（原本的列高），確保每頁列數與分頁完全不變。
+const PRINT_PAGE_LIMIT_PX = 1040;
+function fitPrintDensity(){
+  const container = document.getElementById('printView');
+  if(!container) return;
+  const alreadyOffscreen = container.classList.contains('offscreen-render');
+  if(!alreadyOffscreen) container.classList.add('offscreen-render');
+  const pages = Array.from(container.querySelectorAll(':scope > .print-page')).filter(pg => pg.querySelector('.print-table'));
+  pages.forEach(pg => pg.querySelectorAll('.print-table tbody tr').forEach(tr => { tr.style.height = ''; }));
+  const tallest = ()=> Math.max(0, ...pages.map(pg => pg.getBoundingClientRect().height));
+  let chosen = 4;
+  if(pages.length){
+    for(const pad of [5, 4.5]){
+      container.style.setProperty('--print-pad', pad + 'px');
+      if(tallest() <= PRINT_PAGE_LIMIT_PX){ chosen = pad; break; }
+    }
+  }
+  container.style.setProperty('--print-pad', chosen + 'px');
+  if(!alreadyOffscreen) container.classList.remove('offscreen-render');
+  return chosen;
+}
+
+// 每次要列印/輸出 PDF 前的收尾處理：先移除空白頁，再決定列高，最後統一整頁列高。
 function finalizePrintView(){
   removeBlankPrintPages();
+  fitPrintDensity();
   equalizeRowHeights();
 }
 
