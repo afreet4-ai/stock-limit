@@ -262,7 +262,7 @@
   }
   .print-table th{ background:#ddd; font-weight:700; white-space:nowrap; }
   .print-table td.p-seq, .print-table th:first-child{
-    text-align:center; white-space:nowrap; padding-left:2px; padding-right:2px;
+    text-align:center; white-space:nowrap; padding-left:1px; padding-right:1px;
   }
   .print-table tbody tr td:first-child{ background:#ececec; }
   /* 字體大小以 Word 點數（pt）計：--pt 為每 1pt 對應的 px，列印/下載 PDF 時由 finalizePrintView() 依實際輸出比例設定 */
@@ -2289,10 +2289,10 @@ function rocDateStr(){
   return `${String(rocYear).padStart(3,'0')}${mm}${dd}`;
 }
 
-// 藥名中「括號內含中文」的部分（例如：(專)、(日腦)、(三價-50歲以上)、（取消健保））以較小字體顯示
+// 藥名中「括號內的內容」（不論中文、英文或數字，例如：(專)、(日腦)、(三價)、(Hemo)、(9866)）以 6pt 小字體顯示
 function printNameHtml(name){
   const src = String(name == null ? '' : name);
-  const re = /[（(][^（）()]*[\u3400-\u9fff][^（）()]*[）)]/g;
+  const re = /[（(][^（）()]*[）)]/g;
   let out = '', last = 0, m;
   while((m = re.exec(src))){
     out += escapeHtml(src.slice(last, m.index)) + `<span class="p-note">${escapeHtml(m[0])}</span>`;
@@ -2302,7 +2302,9 @@ function printNameHtml(name){
 }
 
 function nameFontSize(text){
-  const len = (text||'').length;
+  const src = text || '';
+  const parenLen = (src.match(/[（(][^（）()]*[）)]/g) || []).join('').length;
+  const len = (src.length - parenLen) + parenLen * 0.6; // 括號內是 6pt 小字，只算 0.6 個字寬
   if(len <= 17) return 9.8;
   if(len <= 22) return 9.2;
   if(len <= 28) return 8.6;
@@ -2400,9 +2402,9 @@ function buildCategoryPagesHtml(breakAfterLast){
   function tableHtml(list, fillerCount){
     return `<table class="print-table">
       <colgroup>
-        <col style="width:22px">
+        <col style="width:20px">
         <col style="width:15%">
-        <col style="width:44%">
+        <col>
         <col style="width:15%">
         <col style="width:15%">
       </colgroup>
@@ -2890,7 +2892,7 @@ async function downloadAllCategoriesPDF(){
     }else{
       doc.save(`藥品品項表_全分類_${rocDateStr()}.pdf`);
       hideToastNow();
-      const smallNote = smallerCats.length ? `；${smallerCats.join('、')}因版面放不下，名稱字體小於 ${PRINT_NAME_FONT_TARGET} 點` : '';
+      const smallNote = smallerCats.length ? `；因版面放不下，名稱字體小於 ${PRINT_NAME_FONT_TARGET} 點的分類：${smallerCats.map(c => c + ' ' + densityByCat[c][0] + '點').join('、')}` : '';
       showToast((failed > 0 ? `PDF 已下載完成（${failed} 頁擷取失敗已略過）` : 'PDF 已下載完成') + smallNote);
     }
   }catch(e){
