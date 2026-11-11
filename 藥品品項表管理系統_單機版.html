@@ -2868,14 +2868,15 @@ async function downloadAllCategoriesPDF(){
           backgroundColor: '#ffffff',
           windowWidth: 794
         });
-        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+        // 表格文字與線條適合用 PNG 壓縮（比 JPEG 小很多、文字也更清楚）；一定要指定壓縮，否則 PDF 會非常大
+        const imgData = canvas.toDataURL('image/png');
         const imgHeightMm = (canvas.height * usableWidthMm) / canvas.width;
 
         if(i > 0) doc.addPage();
         // 圖片若超過單頁可用高度，等比縮小塞進一頁，避免內容被裁切
         const finalHeightMm = Math.min(imgHeightMm, pageHeightMm - marginMm * 2);
         const finalWidthMm = finalHeightMm === imgHeightMm ? usableWidthMm : (canvas.width * finalHeightMm) / canvas.height;
-        doc.addImage(imgData, 'JPEG', marginMm, marginMm, finalWidthMm, finalHeightMm);
+        doc.addImage(imgData, 'PNG', marginMm, marginMm, finalWidthMm, finalHeightMm, undefined, 'MEDIUM');
         success++;
       }catch(pageErr){
         failed++;
