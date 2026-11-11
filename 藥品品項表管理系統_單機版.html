@@ -265,12 +265,15 @@
     text-align:center; white-space:nowrap; padding-left:2px; padding-right:2px;
   }
   .print-table tbody tr td:first-child{ background:#ececec; }
-  .print-table td.p-seq{ font-weight:600; color:#444; }
+  /* 字體大小以 Word 點數（pt）計：--pt 為每 1pt 對應的 px，列印/下載 PDF 時由 finalizePrintView() 依實際輸出比例設定 */
+  .print-table td.p-seq{ font-weight:600; color:#444; font-size:calc(var(--pt, 1.3333px) * 6); } /* 序號 6pt */
+  .print-table th:first-child{ font-size:calc(var(--pt, 1.3333px) * 6); } /* 表頭「序號」6pt，序號欄才能變窄 */
+  .print-table .p-note{ font-size:calc(var(--pt, 1.3333px) * 6); font-weight:400; } /* 藥名括號內的中文字 6pt */
   .print-table td.p-code{ white-space:nowrap; }
   .print-table td.p-station{ white-space:nowrap; }
-  .print-table td.p-name{ white-space:normal; word-break:break-word; line-height:1.25; font-size:10.8px; } /* 藥品名稱字體加大（原 9.8px） */
+  .print-table td.p-name{ white-space:normal; word-break:break-word; line-height:1.25; font-size:var(--print-name-fs, 9.8px); } /* 藥品名稱字體：目標 12pt，實際大小由 fitPrintDensity() 依版面決定 */
   /* 資料列上下留白加大 → 列高略高；實際採用值由 fitPrintDensity() 依整頁高度自動決定（放不下就退回原本的 4px） */
-  .print-table tbody td{ padding-top:var(--print-pad, 5px); padding-bottom:var(--print-pad, 5px); }
+  .print-table tbody td{ padding-top:var(--print-pad, 4px); padding-bottom:var(--print-pad, 4px); }
   .print-table tr.print-group td{
     background:#dfe5e4; font-weight:700; text-align:center; letter-spacing:0.5px;
   }
@@ -288,6 +291,11 @@
   }
   .print-table tr{ page-break-inside:avoid; break-inside:avoid; }
   .print-page{ }
+  /* 列印／PDF 內容：英文與數字用 Times New Roman（中文自動使用後面的中文字體），所有文字黑色 */
+  #printView{ font-family:'Times New Roman', Times, 'Noto Sans TC', 'Microsoft JhengHei', '微軟正黑體', sans-serif; }
+  #printView, #printView *{ color:#000; }
+  #printView .print-table tr.print-level td{ color:#fff; }          /* 深色橫幅底色維持白字，才看得清楚 */
+  #printView .print-table tr.print-filler td{ color:transparent; }  /* 空白補列維持不顯示文字 */
   .print-page.page-break{ page-break-after:always; break-after:page; }
 
   .cover-table{
@@ -2281,6 +2289,18 @@ function rocDateStr(){
   return `${String(rocYear).padStart(3,'0')}${mm}${dd}`;
 }
 
+// 藥名中「括號內含中文」的部分（例如：(專)、(日腦)、(三價-50歲以上)、（取消健保））以較小字體顯示
+function printNameHtml(name){
+  const src = String(name == null ? '' : name);
+  const re = /[（(][^（）()]*[\u3400-\u9fff][^（）()]*[）)]/g;
+  let out = '', last = 0, m;
+  while((m = re.exec(src))){
+    out += escapeHtml(src.slice(last, m.index)) + `<span class="p-note">${escapeHtml(m[0])}</span>`;
+    last = m.index + m[0].length;
+  }
+  return out + escapeHtml(src.slice(last));
+}
+
 function nameFontSize(text){
   const len = (text||'').length;
   if(len <= 17) return 9.8;
@@ -2362,7 +2382,7 @@ function buildCategoryPagesHtml(breakAfterLast){
       html += `<tr${rowCls}>
         <td class="p-seq">${rec.seq}</td>
         <td class="p-code">${escapeHtml(it.code)}</td>
-        <td class="p-name" style="font-size:${fs}px;">${escapeHtml(it.name)}</td>
+        <td class="p-name" style="font-size:calc(var(--print-name-fs, 9.8px) * ${(fs / 9.8).toFixed(3)});">${printNameHtml(it.name)}</td>
         ${stationCells}
       </tr>`;
     });
@@ -2380,7 +2400,7 @@ function buildCategoryPagesHtml(breakAfterLast){
   function tableHtml(list, fillerCount){
     return `<table class="print-table">
       <colgroup>
-        <col style="width:26px">
+        <col style="width:22px">
         <col style="width:15%">
         <col style="width:44%">
         <col style="width:15%">
@@ -2409,7 +2429,7 @@ function buildCategoryPagesHtml(breakAfterLast){
     lineParts.push(titleText);
     lineParts.push(`製表日期：${rocDateStr()}${pageSuffix}`);
     return `
-      <div class="print-page${noBreak ? '' : ' page-break'}">
+      <div class="print-page${noBreak ? '' : ' page-break'}" data-cat="${escapeHtml(cat)}">
         <div class="print-header">
           <div class="print-title-line">${lineParts.join('　')}</div>
           <div class="print-legend-line"><span class="print-legend">■ 反黃處為新增／異動品項</span></div>
@@ -2631,13 +2651,13 @@ function removeBlankPrintPages(){
 // 內容處於「有實際版面」的狀態才能量測真實高度，所以量測時會暫時借用 offscreen-render
 // 這個離屏渲染樣式（若呼叫端本來就已經套用了這個樣式，例如下載 PDF 時，量測完不會把它
 // 拿掉，維持原本擷取用的可見狀態）。
-function equalizeRowHeights(){
+function equalizeRowHeights(onlyPages){
   const container = document.getElementById('printView');
   if(!container) return;
   const alreadyOffscreen = container.classList.contains('offscreen-render');
   if(!alreadyOffscreen) container.classList.add('offscreen-render');
 
-  const pages = container.querySelectorAll('.print-page');
+  const pages = onlyPages || container.querySelectorAll('.print-page');
   pages.forEach(page=>{
     const tables = Array.from(page.querySelectorAll('.print-table'));
     if(tables.length < 2) return; // 只有單欄時沒有跨欄對齊的需要，維持各列原本高度
@@ -2666,34 +2686,74 @@ function equalizeRowHeights(){
   if(!alreadyOffscreen) container.classList.remove('offscreen-render');
 }
 
-// 列高自動檢查：優先使用較高的列高（上下留白 5px），若會讓任何一頁超過 A4 可用高度，
-// 就依序退到 4.5px、4px（原本的列高），確保每頁列數與分頁完全不變。
-const PRINT_PAGE_LIMIT_PX = 1040;
-function fitPrintDensity(){
+// 字體／列高自動放大（字體大小以 Word 點數 pt 計）：
+// 藥品名稱目標 10.5pt。每個分類各自挑選「整頁（含跨欄對齊列高後）仍放得進一頁」的最大字體，
+// 再在該字體下盡量加大列上下留白，所以每頁列數與分頁完全不變；
+// 版面很滿（名稱多、換行多）的分類會自動退到較小字體，最小為原本大小（約 6.9pt）。
+// 同一分類的所有頁面使用同一組，視覺一致。
+const PRINT_NAME_FONT_TARGET = 10.5;  // 藥品名稱目標字體（pt）
+const PRINT_NAME_FONT_LEVELS = [10.5, 10, 9.5, 9, 8.5, 8, 7.5, 6.9]; // pt，由大到小（最後一個＝原本大小）
+const PRINT_PAD_LEVELS = [6, 5, 4.5, 4, 3.5, 3];  // 列上下留白 px，由寬到窄
+const PRINT_PAGE_LIMIT_PDF = 1130;   // 下載 PDF：A4 扣除上下各 6mm 邊界後的可用高度（以 794px 寬換算）
+const PRINT_PAGE_LIMIT_PRINT = 1040; // 瀏覽器直接列印：保守值（預設邊界較大）
+// 每 1pt 對應的 px：PDF 以 794px 寬縮放成 198mm 寬，故 1pt 約 1.415px；瀏覽器列印為 100% 比例，1pt＝96/72 px
+const PRINT_PX_PER_PT_PDF = 794 / (198 / 25.4 * 72);
+const PRINT_PX_PER_PT_PRINT = 96 / 72;
+function fitPrintDensity(limitPx, pxPerPt){
   const container = document.getElementById('printView');
   if(!container) return;
+  const limit = limitPx || PRINT_PAGE_LIMIT_PRINT;
+  const ppp = pxPerPt || PRINT_PX_PER_PT_PRINT;
+  container.style.setProperty('--pt', ppp + 'px');
   const alreadyOffscreen = container.classList.contains('offscreen-render');
   if(!alreadyOffscreen) container.classList.add('offscreen-render');
-  const pages = Array.from(container.querySelectorAll(':scope > .print-page')).filter(pg => pg.querySelector('.print-table'));
-  pages.forEach(pg => pg.querySelectorAll('.print-table tbody tr').forEach(tr => { tr.style.height = ''; }));
-  const tallest = ()=> Math.max(0, ...pages.map(pg => pg.getBoundingClientRect().height));
-  let chosen = 4;
-  if(pages.length){
-    for(const pad of [5, 4.5]){
-      container.style.setProperty('--print-pad', pad + 'px');
-      if(tallest() <= PRINT_PAGE_LIMIT_PX){ chosen = pad; break; }
+
+  const groups = {};
+  Array.from(container.querySelectorAll(':scope > .print-page')).forEach(pg=>{
+    if(!pg.querySelector('.print-table')) return; // 封面、異動明細頁不處理
+    (groups[pg.dataset.cat || ''] = groups[pg.dataset.cat || ''] || []).push(pg);
+  });
+
+  const chosenByCat = {};
+  Object.keys(groups).forEach(cat=>{
+    const pages = groups[cat];
+    const apply = (pt, pad)=>{
+      pages.forEach(pg=>{
+        pg.style.setProperty('--print-name-fs', (pt * ppp).toFixed(2) + 'px');
+        pg.style.setProperty('--print-pad', pad + 'px');
+      });
+    };
+    // 先對齊列高，再量整頁高度（對齊後的高度才是實際高度）
+    const fits = (pt, pad)=>{
+      apply(pt, pad);
+      equalizeRowHeights(pages);
+      return Math.max(0, ...pages.map(pg => pg.getBoundingClientRect().height)) <= limit;
+    };
+    const minPad = PRINT_PAD_LEVELS[PRINT_PAD_LEVELS.length - 1];
+    // 1) 以最窄留白，二分搜尋「放得下的最大字體」（字體越大頁越高，單調）
+    let lo = 0, hi = PRINT_NAME_FONT_LEVELS.length - 1; // hi 為原本大小，視為一定採用
+    while(lo < hi){
+      const mid = (lo + hi) >> 1;
+      if(fits(PRINT_NAME_FONT_LEVELS[mid], minPad)) hi = mid; else lo = mid + 1;
     }
-  }
-  container.style.setProperty('--print-pad', chosen + 'px');
+    const pt = PRINT_NAME_FONT_LEVELS[lo];
+    // 2) 在該字體下，列上下留白盡量放寬
+    let pad = minPad;
+    for(const p of PRINT_PAD_LEVELS){ if(fits(pt, p)){ pad = p; break; } }
+    apply(pt, pad);
+    chosenByCat[cat] = [pt, pad];
+  });
+
   if(!alreadyOffscreen) container.classList.remove('offscreen-render');
-  return chosen;
+  return chosenByCat;
 }
 
-// 每次要列印/輸出 PDF 前的收尾處理：先移除空白頁，再決定列高，最後統一整頁列高。
-function finalizePrintView(){
+// 每次要列印/輸出 PDF 前的收尾處理：先移除空白頁，再決定字體與列高，最後統一整頁列高。
+function finalizePrintView(forPdf){
   removeBlankPrintPages();
-  fitPrintDensity();
+  const chosen = fitPrintDensity(forPdf ? PRINT_PAGE_LIMIT_PDF : PRINT_PAGE_LIMIT_PRINT, forPdf ? PRINT_PX_PER_PT_PDF : PRINT_PX_PER_PT_PRINT);
   equalizeRowHeights();
+  return chosen;
 }
 
 function printAfterRender(){
@@ -2773,7 +2833,8 @@ async function downloadAllCategoriesPDF(){
   const container = document.getElementById('printView');
   container.innerHTML = combined;
   container.classList.add('offscreen-render');
-  finalizePrintView();
+  const densityByCat = finalizePrintView(true) || {};
+  const smallerCats = Object.keys(densityByCat).filter(c => densityByCat[c][0] < PRINT_NAME_FONT_TARGET);
 
   // 等待瀏覽器完成離屏版面渲染，避免擷取到還沒排好版的內容
   await new Promise(resolve => setTimeout(resolve, 200));
@@ -2829,7 +2890,8 @@ async function downloadAllCategoriesPDF(){
     }else{
       doc.save(`藥品品項表_全分類_${rocDateStr()}.pdf`);
       hideToastNow();
-      showToast(failed > 0 ? `PDF 已下載完成（${failed} 頁擷取失敗已略過）` : 'PDF 已下載完成');
+      const smallNote = smallerCats.length ? `；${smallerCats.join('、')}因版面放不下，名稱字體小於 ${PRINT_NAME_FONT_TARGET} 點` : '';
+      showToast((failed > 0 ? `PDF 已下載完成（${failed} 頁擷取失敗已略過）` : 'PDF 已下載完成') + smallNote);
     }
   }catch(e){
     hideToastNow();
