@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>冰箱溫度日誌</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<style>
+:root{
+  --bg:#F5F7F5; --surface:#FFFFFF; --surface-2:#EEF3F0; --ink:#152622; --muted:#5B6B65;
+  --border:#DCE5E0; --teal:#1F6F63; --teal-dark:#134A41; --red:#B3413B; --red-bg:#FBEAEA;
+  --green:#2F8F6F; --green-bg:#E9F5EF; --tick-empty:#D8DED9; --amber:#B7791F;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0F1C18; --surface:#16302A; --surface-2:#1C3A31; --ink:#EAF3EF; --muted:#9FB3AC;
+    --border:#2B4941; --teal:#5FBFA9; --teal-dark:#3F8E7E; --red:#E2827B; --red-bg:#3A211F;
+    --green:#78D2AC; --green-bg:#193C30; --tick-empty:#2B4941; --amber:#E0AC4F;
+  }
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;padding:1.5rem;}
+.wrap{max-width:960px;margin:0 auto;}
+.eyebrow{font-family:'Libre Franklin',sans-serif;font-weight:600;font-size:12px;letter-spacing:.08em;color:var(--teal);text-transform:uppercase;}
+h1{font-family:'Libre Franklin',sans-serif;font-weight:700;font-size:26px;margin:.2rem 0 .6rem;}
+.range-badge{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:13px;color:var(--muted);}
+.range-badge i{font-size:15px;color:var(--teal);}
+.fridge-bar{display:flex;align-items:center;gap:8px;margin:1rem 0 0;}
+.fridge-bar-label{font-size:13px;color:var(--muted);font-weight:600;}
+#fridgeSelect{height:32px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--ink);padding:0 8px;font-size:13px;}
+.icon-btn{width:30px;height:30px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.icon-btn:hover{background:var(--surface-2);color:var(--ink);}
+.controls{display:flex;align-items:center;gap:10px;margin:1.4rem 0 1rem;}
+.controls button{height:32px;padding:0 12px;gap:5px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;white-space:nowrap;}
+.controls button:hover{background:var(--surface-2);}
+.month-label{font-family:'Libre Franklin',sans-serif;font-weight:600;font-size:16px;min-width:110px;text-align:center;}
+.save-indicator{margin-left:auto;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;transition:opacity .3s;}
+.save-indicator i{font-size:14px;color:var(--teal);}
+section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.1rem 1.2rem;margin-bottom:1.1rem;}
+.chart-card-head{position:relative;display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-bottom:14px;min-height:32px;}
+.chart-title{position:absolute;left:50%;transform:translateX(-50%);text-align:center;white-space:nowrap;font-family:'Libre Franklin',sans-serif;font-weight:700;font-size:16px;}
+.chart-card-actions{display:flex;align-items:center;gap:10px;}
+.seq-label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);}
+.seq-label input{width:44px;height:28px;text-align:center;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink);font-size:13px;}
+#exportPdfBtn{display:flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-size:13px;cursor:pointer;}
+#exportPdfBtn:hover{background:var(--surface-2);}
+.staffcode-list{display:flex;flex-wrap:wrap;gap:8px;}
+.staffcode-row{display:flex;align-items:center;gap:5px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:4px 6px;}
+.staffcode-row input.code{width:34px;height:26px;text-align:center;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--ink);font-size:12px;font-family:'IBM Plex Mono',monospace;}
+.staffcode-row input.name{width:66px;height:26px;text-align:center;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--ink);font-size:12px;}
+.staffcode-row .eq{font-size:12px;color:var(--muted);}
+.staffcode-row .del{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:13px;display:flex;align-items:center;}
+.staffcode-row .del:hover{color:var(--red);}
+.staff-row{display:flex;gap:2px;height:26px;margin-top:6px;}
+.staff-block{display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);border-right:1px dashed var(--border);white-space:nowrap;overflow:hidden;}
+.staff-block:last-child{border-right:none;}
+.staff-block.filled{color:var(--ink);font-weight:600;}
+.stamp-row{display:flex;gap:6px;margin-top:14px;}
+.stamp-block{display:flex;align-items:center;justify-content:center;min-width:0;}
+.stamp-seal{border:2px solid var(--red);border-radius:6px;padding:4px 8px;text-align:center;line-height:1.25;cursor:pointer;}
+.stamp-seal .lbl{font-size:10px;color:var(--red);font-weight:700;letter-spacing:.1em;}
+.stamp-seal .lic{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--red);font-weight:700;}
+.stamp-seal .nm{font-size:12px;color:var(--red);font-weight:600;}
+.stamp-add{display:flex;align-items:center;gap:4px;height:30px;padding:0 10px;border:1px dashed var(--border);border-radius:8px;background:transparent;color:var(--muted);font-size:12px;cursor:pointer;white-space:nowrap;}
+.stamp-add:hover{background:var(--surface-2);}
+.stamp-form{display:flex;flex-direction:column;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 8px;}
+.stamp-form input{width:88px;height:26px;font-size:12px;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--ink);padding:0 6px;}
+.stamp-form button{height:24px;border:none;border-radius:5px;background:var(--teal);color:#fff;font-size:11px;cursor:pointer;}
+.chart-row{display:flex;gap:14px;background:#ffffff;border-radius:8px;padding:8px;}
+.chart-legend-v{display:flex;flex-direction:column;gap:12px;justify-content:center;min-width:74px;}
+.chart-legend-v span{display:flex;align-items:center;font-size:12px;color:#5B6B65;}
+.chart-legend-v .dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;flex-shrink:0;}
+.chart-col{flex:1;min-width:0;display:flex;flex-direction:column;}
+.chart-wrap{position:relative;height:260px;min-width:0;}
+.axis-row{display:flex;}
+.axis-block{margin-left:0.5cm;width:calc(100% - 0.5cm);}
+.axis-row > div{flex:1 1 0;min-width:0;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);border-right:1px solid var(--border);}
+.axis-row > div:last-child{border-right:none;}
+.axis-row.shift > div{font-family:'Inter',sans-serif;font-size:10px;color:var(--muted);padding-bottom:4px;}
+.staff-row{margin-top:2px;}
+.stamp-row{margin-top:10px;}
+.table-scroll{overflow-x:auto;}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:13px;}
+thead th{position:sticky;top:0;background:var(--surface-2);color:var(--muted);font-weight:600;font-size:12px;text-align:center;padding:8px 6px;border-bottom:1px solid var(--border);}
+tbody td{text-align:center;padding:5px 4px;border-bottom:1px solid var(--border);}
+tbody tr:hover{background:var(--surface-2);}
+.date-cell{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--muted);}
+input.num{width:64px;height:30px;text-align:center;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:13px;}
+input.staff{width:78px;height:30px;text-align:center;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink);font-size:13px;}
+input.num:focus,input.staff:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 2px rgba(31,111,99,.15);}
+.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:600;}
+.badge.normal{background:var(--green-bg);color:var(--green);}
+.badge.abnormal{background:var(--red-bg);color:var(--red);}
+.badge.empty{background:var(--surface-2);color:var(--muted);}
+.footer{display:flex;flex-wrap:wrap;align-items:center;gap:14px;}
+.footer label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px;}
+.footer input#pharmacist,.footer input#pharmacistLicense{height:32px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink);padding:0 10px;font-size:13px;width:140px;}
+.actions{margin-left:auto;display:flex;gap:8px;}
+.actions button{display:flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-size:13px;cursor:pointer;}
+.actions button:hover{background:var(--surface-2);}
+@media print{
+  body *{visibility:hidden;}
+  #chartCard, #chartCard *{visibility:visible;}
+  #chartCard{position:absolute;left:0;top:0;width:100%;border:none;box-shadow:none;padding:0;}
+  .chart-card-actions{display:none !important;}
+  .stamp-block.no-seal{visibility:hidden;}
+  body{padding:0;background:#fff;color:#000;}
+}
+#chartCard.exporting .chart-card-actions{visibility:hidden;}
+#chartCard.exporting .stamp-block.no-seal{visibility:hidden;}
+.pdf-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 18px;border-radius:20px;font-size:13px;display:flex;align-items:center;gap:8px;box-shadow:0 4px 14px rgba(0,0,0,.2);z-index:999;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">公費疫苗冷藏紀錄</div>
+  <h1>冰箱溫度日誌</h1>
+  <div class="range-badge"><i class="ti ti-thermometer"></i>合格範圍 2°C – 8°C</div>
+
+  <div class="fridge-bar" id="fridgeBar">
+    <span class="fridge-bar-label">冰箱</span>
+    <select id="fridgeSelect"></select>
+    <button id="renameFridgeBtn" class="icon-btn" title="重新命名"><i class="ti ti-pencil"></i></button>
+    <button id="addFridgeBtn" class="icon-btn" title="新增冰箱"><i class="ti ti-plus"></i></button>
+    <button id="deleteFridgeBtn" class="icon-btn" title="刪除此冰箱"><i class="ti ti-trash"></i></button>
+  </div>
+
+  <div class="controls">
+    <button id="prevBtn" aria-label="上個月"><i class="ti ti-chevron-left"></i>上個月</button>
+    <div class="month-label" id="monthLabel">—</div>
+    <button id="nextBtn" aria-label="下個月">下個月<i class="ti ti-chevron-right"></i></button>
+    <div class="save-indicator" id="saveIndicator"><i class="ti ti-cloud-check"></i><span>已自動儲存（共用）</span></div>
+  </div>
+
+  <section id="chartCard">
+    <div class="chart-card-head">
+      <div class="chart-title" id="chartTitle">—</div>
+      <div class="chart-card-actions">
+        <label class="seq-label">編號<input id="seqInput" type="text" maxlength="4" placeholder="7"></label>
+        <button id="exportPdfBtn"><i class="ti ti-file-type-pdf"></i>匯出PDF</button>
+      </div>
+    </div>
+    <div class="chart-row">
+      <div class="chart-legend-v">
+        <span><i class="dot" style="background:#2b2b2b"></i>高溫</span>
+        <span><i class="dot" style="background:#b3413b"></i>低溫</span>
+        <span><i class="dot" style="background:#2a78d6"></i>現在溫度</span>
+      </div>
+      <div class="chart-col">
+        <div class="chart-wrap">
+          <canvas id="tempChart" role="img" aria-label="本月冰箱高溫、低溫、現在溫度趨勢圖"></canvas>
+        </div>
+        <div class="axis-block">
+          <div class="axis-row" id="dateRow"></div>
+          <div class="axis-row shift" id="shiftRow"></div>
+          <div class="staff-row" id="staffRow"></div>
+          <div class="stamp-row" id="stampRow"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>日期</th><th>班別</th><th>高溫(℃)</th><th>低溫(℃)</th><th>現在溫度(℃)</th><th>人員</th><th>狀態</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="chart-title" style="font-size:14px;">人員代碼設定 <span style="font-weight:400;color:var(--muted);font-size:12px;">— 表格「人員」欄位輸入代碼，離開欄位後自動換成姓名</span></div>
+    <div id="staffCodeList" class="staffcode-list"></div>
+    <button id="addStaffCode" class="stamp-add" style="margin-top:10px;"><i class="ti ti-plus"></i>新增代碼</button>
+  </section>
+
+  <section class="footer">
+    <label>藥師執照字號 <input id="pharmacistLicense" type="text" placeholder="16074" style="width:90px;"></label>
+    <label>藥師簽章 <input id="pharmacist" type="text" placeholder="姓名"></label>
+    <div class="actions">
+      <button id="exportCsv"><i class="ti ti-download"></i>匯出CSV</button>
+      <button id="printBtn"><i class="ti ti-printer"></i>列印</button>
+    </div>
+  </section>
+</div>
+
+<div class="pdf-toast" id="pdfToast" style="display:none;"><i class="ti ti-loader"></i>PDF 產生中…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const today = new Date();
+const state = { year: today.getFullYear(), month: today.getMonth() + 1, fridgeId: '', entries: {}, pharmacist: '', pharmacistLicense: '', stamps: {}, seq: '' };
+let saveTimer = null;
+let chart = null;
+let staffCodes = [];
+
+function daysInMonth(y, m) { return new Date(y, m, 0).getDate(); }
+function entryKey(day, shift) { return day + '_' + shift; }
+function getEntry(day, shift) {
+  const e = state.entries[entryKey(day, shift)];
+  return e || { high: '', low: '', now: '', staff: '' };
+}
+function setEntryField(day, shift, field, value) {
+  const k = entryKey(day, shift);
+  if (!state.entries[k]) state.entries[k] = { high: '', low: '', now: '', staff: '' };
+  state.entries[k][field] = value;
+  scheduleSave();
+}
+function getStatus(entry) {
+  const nums = [entry.high, entry.low, entry.now]
+    .filter(v => v !== '' && v !== null && v !== undefined && !isNaN(v))
+    .map(Number);
+  if (nums.length === 0) return 'empty';
+  return nums.some(v => v < 2 || v > 8) ? 'abnormal' : 'normal';
+}
+function storageKey() { return 'fridge-log:' + state.fridgeId + ':' + state.year + '-' + state.month; }
+
+async function loadMonth() {
+  state.entries = {};
+  state.pharmacist = '吳秋宜';
+  state.pharmacistLicense = '16074';
+  state.stamps = {};
+  state.seq = '7';
+  try {
+    let res = await window.storage.get(storageKey(), true);
+    if ((!res || !res.value) && fridges.length && state.fridgeId === fridges[0].id) {
+      try {
+        const legacyRes = await window.storage.get('fridge-log:' + state.year + '-' + state.month, true);
+        if (legacyRes && legacyRes.value) res = legacyRes;
+      } catch (err2) { /* no legacy data */ }
+    }
+    if (res && res.value) {
+      const parsed = JSON.parse(res.value);
+      state.entries = parsed.entries || {};
+      state.pharmacist = parsed.pharmacist || '吳秋宜';
+      state.pharmacistLicense = parsed.pharmacistLicense || '16074';
+      state.stamps = parsed.stamps || {};
+      state.seq = parsed.seq || '7';
+    }
+  } catch (err) {
+    state.entries = {};
+    state.pharmacist = '吳秋宜';
+    state.pharmacistLicense = '16074';
+    state.stamps = {};
+    state.seq = '7';
+  }
+  document.getElementById('pharmacist').value = state.pharmacist;
+  document.getElementById('pharmacistLicense').value = state.pharmacistLicense;
+  document.getElementById('seqInput').value = state.seq;
+}
+
+function rocYear(year) { return year - 1911; }
+
+function updateChartTitle() {
+  const suffix = state.seq ? '(' + state.seq + ')' : '';
+  document.getElementById('chartTitle').textContent = rocYear(state.year) + '年' + state.month + '月溫度登記表' + suffix;
+}
+
+const FRIDGE_KEY = 'fridge-log:units';
+let fridges = [];
+
+async function loadFridges() {
+  try {
+    const res = await window.storage.get(FRIDGE_KEY, true);
+    if (res && res.value) {
+      const parsed = JSON.parse(res.value);
+      if (Array.isArray(parsed) && parsed.length) { fridges = parsed; return; }
+    }
+  } catch (err) { /* no saved fridges yet */ }
+  fridges = [{ id: '1', name: '冰箱1' }];
+}
+
+async function saveFridges() {
+  try { await window.storage.set(FRIDGE_KEY, JSON.stringify(fridges), true); } catch (err) { /* ignore */ }
+}
+
+function buildFridgeSelect() {
+  const sel = document.getElementById('fridgeSelect');
+  sel.innerHTML = '';
+  fridges.forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = f.id;
+    opt.textContent = f.name;
+    if (f.id === state.fridgeId) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function promptFridgeName(defaultVal, onConfirm) {
+  const bar = document.getElementById('fridgeBar');
+  const original = bar.innerHTML;
+  bar.innerHTML = '';
+  const input = document.createElement('input');
+  input.value = defaultVal;
+  input.placeholder = '冰箱名稱';
+  input.style.cssText = 'height:30px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink);padding:0 8px;font-size:13px;width:120px;';
+  const okBtn = document.createElement('button');
+  okBtn.className = 'icon-btn';
+  okBtn.innerHTML = '<i class="ti ti-check"></i>';
+  const restore = () => {
+    bar.innerHTML = original;
+    attachFridgeBarEvents();
+    buildFridgeSelect();
+  };
+  okBtn.addEventListener('click', () => {
+    const val = input.value.trim();
+    if (val) onConfirm(val);
+    restore();
+  });
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'icon-btn';
+  cancelBtn.innerHTML = '<i class="ti ti-x"></i>';
+  cancelBtn.addEventListener('click', restore);
+  bar.appendChild(input);
+  bar.appendChild(okBtn);
+  bar.appendChild(cancelBtn);
+  input.focus();
+  input.select();
+}
+
+function attachFridgeBarEvents() {
+  document.getElementById('fridgeSelect').addEventListener('change', (e) => {
+    state.fridgeId = e.target.value;
+    renderMonth();
+  });
+  document.getElementById('renameFridgeBtn').addEventListener('click', () => {
+    const current = fridges.find(f => f.id === state.fridgeId);
+    promptFridgeName(current ? current.name : '', (val) => {
+      if (current) current.name = val;
+      saveFridges();
+      updateChartTitle();
+    });
+  });
+  document.getElementById('addFridgeBtn').addEventListener('click', () => {
+    promptFridgeName('冰箱' + (fridges.length + 1), (val) => {
+      const newFridge = { id: 'f' + Date.now(), name: val };
+      fridges.push(newFridge);
+      state.fridgeId = newFridge.id;
+      saveFridges();
+      renderMonth();
+    });
+  });
+  document.getElementById('deleteFridgeBtn').addEventListener('click', () => {
+    if (fridges.length <= 1) return;
+    const btn = document.getElementById('deleteFridgeBtn');
+    if (btn.dataset.confirm === '1') {
+      fridges = fridges.filter(f => f.id !== state.fridgeId);
+      state.fridgeId = fridges[0].id;
+      saveFridges();
+      buildFridgeSelect();
+      renderMonth();
+      btn.dataset.confirm = '';
+      btn.innerHTML = '<i class="ti ti-trash"></i>';
+    } else {
+      btn.dataset.confirm = '1';
+      btn.innerHTML = '<i class="ti ti-alert-triangle"></i>';
+      setTimeout(() => { btn.dataset.confirm = ''; btn.innerHTML = '<i class="ti ti-trash"></i>'; }, 3000);
+    }
+  });
+}
+
+const STAFF_CODE_KEY = 'fridge-log:staff-codes';
+
+async function loadStaffCodes() {
+  try {
+    const res = await window.storage.get(STAFF_CODE_KEY, true);
+    if (res && res.value) {
+      staffCodes = JSON.parse(res.value);
+      return;
+    }
+  } catch (err) { /* no saved codes yet */ }
+  staffCodes = [
+    { code: '1', name: '梅菊' },
+    { code: '2', name: '孟蓁' },
+    { code: '3', name: '家君' }
+  ];
+}
+
+async function saveStaffCodes() {
+  try { await window.storage.set(STAFF_CODE_KEY, JSON.stringify(staffCodes), true); } catch (err) { /* ignore */ }
+}
+
+function codeToName(raw) {
+  const hit = staffCodes.find(sc => sc.code === raw);
+  return hit ? hit.name : null;
+}
+
+function buildStaffCodeUI() {
+  const wrap = document.getElementById('staffCodeList');
+  wrap.innerHTML = '';
+  staffCodes.forEach((sc, idx) => {
+    const row = document.createElement('div');
+    row.className = 'staffcode-row';
+
+    const codeInput = document.createElement('input');
+    codeInput.className = 'code';
+    codeInput.value = sc.code;
+    codeInput.addEventListener('change', () => { sc.code = codeInput.value.trim(); saveStaffCodes(); });
+
+    const eq = document.createElement('span');
+    eq.className = 'eq';
+    eq.textContent = '=';
+
+    const nameInput = document.createElement('input');
+    nameInput.className = 'name';
+    nameInput.value = sc.name;
+    nameInput.addEventListener('change', () => { sc.name = nameInput.value.trim(); saveStaffCodes(); buildStaffRow(); });
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'del';
+    delBtn.innerHTML = '<i class="ti ti-x"></i>';
+    delBtn.addEventListener('click', () => {
+      staffCodes.splice(idx, 1);
+      saveStaffCodes();
+      buildStaffCodeUI();
+    });
+
+    row.appendChild(codeInput);
+    row.appendChild(eq);
+    row.appendChild(nameInput);
+    row.appendChild(delBtn);
+    wrap.appendChild(row);
+  });
+}
+
+function getMonthWeeks(year, month) {
+  const n = daysInMonth(year, month);
+  const weeks = [];
+  let current = [];
+  for (let d = 1; d <= n; d++) {
+    const dow = new Date(year, month - 1, d).getDay();
+    current.push(d);
+    if (dow === 6 || d === n) {
+      weeks.push(current);
+      current = [];
+    }
+  }
+  return weeks;
+}
+
+function scheduleSave() {
+  const indicator = document.getElementById('saveIndicator');
+  indicator.style.opacity = '0.4';
+  indicator.querySelector('span').textContent = '儲存中…';
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      await window.storage.set(storageKey(), JSON.stringify({ entries: state.entries, pharmacist: state.pharmacist, pharmacistLicense: state.pharmacistLicense, stamps: state.stamps, seq: state.seq }), true);
+      indicator.querySelector('span').textContent = '已自動儲存';
+    } catch (err) {
+      indicator.querySelector('span').textContent = '儲存失敗';
+    }
+    indicator.style.opacity = '1';
+  }, 500);
+}
+
+function monthLabelText() { return state.year + '年' + state.month + '月'; }
+
+function buildTable() {
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  const n = daysInMonth(state.year, state.month);
+  for (let d = 1; d <= n; d++) {
+    ['上午', '下午'].forEach((shift, idx) => {
+      const entry = getEntry(d, shift);
+      const tr = document.createElement('tr');
+      tr.id = 'row_' + d + '_' + shift;
+
+      if (idx === 0) {
+        const dateTd = document.createElement('td');
+        dateTd.className = 'date-cell';
+        dateTd.textContent = d;
+        dateTd.rowSpan = 2;
+        tr.appendChild(dateTd);
+      }
+
+      const shiftTd = document.createElement('td');
+      shiftTd.textContent = shift;
+      tr.appendChild(shiftTd);
+
+      const makeNumInput = (field) => {
+        const td = document.createElement('td');
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.step = '0.1';
+        input.className = 'num';
+        input.value = entry[field];
+        input.addEventListener('input', () => {
+          setEntryField(d, shift, field, input.value);
+          const badge = document.getElementById('badge_' + d + '_' + shift);
+          const status = getStatus(getEntry(d, shift));
+          badge.className = 'badge ' + status;
+          badge.textContent = status === 'abnormal' ? '⚠ 異常' : status === 'normal' ? '正常' : '—';
+          updateChart();
+        });
+        td.appendChild(input);
+        return td;
+      };
+
+      tr.appendChild(makeNumInput('high'));
+      tr.appendChild(makeNumInput('low'));
+      tr.appendChild(makeNumInput('now'));
+
+      const staffTd = document.createElement('td');
+      const staffInput = document.createElement('input');
+      staffInput.type = 'text';
+      staffInput.className = 'staff';
+      staffInput.placeholder = '代碼';
+      staffInput.value = entry.staff;
+      staffInput.addEventListener('input', () => {
+        setEntryField(d, shift, 'staff', staffInput.value);
+      });
+      staffInput.addEventListener('blur', () => {
+        const raw = staffInput.value.trim();
+        const mapped = codeToName(raw);
+        const finalVal = mapped || raw;
+        staffInput.value = finalVal;
+        setEntryField(d, shift, 'staff', finalVal);
+        buildStaffRow();
+      });
+      staffTd.appendChild(staffInput);
+      tr.appendChild(staffTd);
+
+      const statusTd = document.createElement('td');
+      const badge = document.createElement('span');
+      const status = getStatus(entry);
+      badge.id = 'badge_' + d + '_' + shift;
+      badge.className = 'badge ' + status;
+      badge.textContent = status === 'abnormal' ? '⚠ 異常' : status === 'normal' ? '正常' : '—';
+      statusTd.appendChild(badge);
+      tr.appendChild(statusTd);
+
+      tbody.appendChild(tr);
+    });
+  }
+}
+
+function buildDateRow() {
+  const row = document.getElementById('dateRow');
+  row.innerHTML = '';
+  const n = daysInMonth(state.year, state.month);
+  for (let d = 1; d <= n; d++) {
+    const cell = document.createElement('div');
+    cell.style.flex = '2 1 0';
+    cell.textContent = d;
+    row.appendChild(cell);
+  }
+}
+
+function buildShiftRow() {
+  const row = document.getElementById('shiftRow');
+  row.innerHTML = '';
+  const n = daysInMonth(state.year, state.month);
+  for (let d = 1; d <= n; d++) {
+    ['上午', '下午'].forEach(shift => {
+      const cell = document.createElement('div');
+      cell.style.flex = '1 1 0';
+      cell.textContent = shift;
+      row.appendChild(cell);
+    });
+  }
+}
+
+function buildStaffRow() {
+  const row = document.getElementById('staffRow');
+  row.innerHTML = '';
+  const n = daysInMonth(state.year, state.month);
+  for (let d = 1; d <= n; d++) {
+    const am = (getEntry(d, '上午').staff || '').trim();
+    const pm = (getEntry(d, '下午').staff || '').trim();
+    let combined;
+    if (am && pm) combined = am === pm ? am : (am + '/' + pm);
+    else combined = am || pm;
+    const block = document.createElement('div');
+    block.className = 'staff-block' + (combined ? ' filled' : '');
+    block.style.flex = '2 1 0';
+    block.textContent = combined || '';
+    row.appendChild(block);
+  }
+}
+
+function stampBlockView(weekIndex, dayCount) {
+  const wrap = document.createElement('div');
+  wrap.className = 'stamp-block';
+  wrap.style.flex = dayCount + ' 1 0';
+  const saved = state.stamps[weekIndex];
+  if (saved && (saved.license || saved.name)) {
+    wrap.classList.add('has-seal');
+    const seal = document.createElement('div');
+    seal.className = 'stamp-seal';
+    seal.innerHTML = '<div class="lbl">藥師</div><div class="lic"></div><div class="nm"></div>';
+    seal.querySelector('.lic').textContent = saved.license;
+    seal.querySelector('.nm').textContent = saved.name;
+    seal.title = '點選可修改本週蓋章資料';
+    seal.addEventListener('click', () => renderStampForm(wrap, weekIndex));
+    wrap.appendChild(seal);
+  } else {
+    wrap.classList.add('no-seal');
+    const btn = document.createElement('button');
+    btn.className = 'stamp-add';
+    btn.innerHTML = '<i class="ti ti-stamp"></i>本週藥師蓋章';
+    btn.addEventListener('click', () => {
+      const license = document.getElementById('pharmacistLicense').value.trim();
+      const name = document.getElementById('pharmacist').value.trim();
+      if (!license && !name) {
+        renderStampForm(wrap, weekIndex);
+        return;
+      }
+      state.stamps[weekIndex] = { license, name };
+      scheduleSave();
+      buildStampRow();
+    });
+    wrap.appendChild(btn);
+  }
+  return wrap;
+}
+
+function renderStampForm(wrap, weekIndex) {
+  const saved = state.stamps[weekIndex] || { license: '', name: '' };
+  wrap.innerHTML = '';
+  const form = document.createElement('div');
+  form.className = 'stamp-form';
+  const licInput = document.createElement('input');
+  licInput.placeholder = '執照字號';
+  licInput.value = saved.license;
+  const nameInput = document.createElement('input');
+  nameInput.placeholder = '藥師姓名';
+  nameInput.value = saved.name;
+  const confirmBtn = document.createElement('button');
+  confirmBtn.textContent = '確認蓋章';
+  confirmBtn.addEventListener('click', () => {
+    state.stamps[weekIndex] = { license: licInput.value.trim(), name: nameInput.value.trim() };
+    scheduleSave();
+    buildStampRow();
+  });
+  form.appendChild(licInput);
+  form.appendChild(nameInput);
+  form.appendChild(confirmBtn);
+  wrap.appendChild(form);
+}
+
+function buildStampRow() {
+  const row = document.getElementById('stampRow');
+  row.innerHTML = '';
+  const weeks = getMonthWeeks(state.year, state.month);
+  weeks.forEach((week, idx) => {
+    row.appendChild(stampBlockView(idx, week.length * 2));
+  });
+}
+
+
+function buildChartData() {
+  const n = daysInMonth(state.year, state.month);
+  const labels = [], high = [], low = [], now = [];
+  for (let d = 1; d <= n; d++) {
+    ['上午', '下午'].forEach(shift => {
+      const e = getEntry(d, shift);
+      labels.push(d + '日 ' + shift);
+      high.push(e.high === '' || e.high === undefined ? null : Number(e.high));
+      low.push(e.low === '' || e.low === undefined ? null : Number(e.low));
+      now.push(e.now === '' || e.now === undefined ? null : Number(e.now));
+    });
+  }
+  return { labels, high, low, now };
+}
+
+function buildChart() {
+  const data = buildChartData();
+  const ctx = document.getElementById('tempChart');
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.labels,
+      datasets: [
+        { label: '高溫', data: data.high, borderColor: '#2b2b2b', backgroundColor: '#2b2b2b', pointRadius: 3, spanGaps: false, tension: 0 },
+        { label: '低溫', data: data.low, borderColor: '#b3413b', backgroundColor: '#b3413b', pointRadius: 3, spanGaps: false, tension: 0 },
+        { label: '現在溫度', data: data.now, borderColor: '#2a78d6', backgroundColor: '#2a78d6', pointRadius: 3, spanGaps: false, tension: 0 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      devicePixelRatio: Math.max(window.devicePixelRatio || 1, 3),
+      scales: {
+        y: {
+          min: 0, max: 10,
+          ticks: {
+            stepSize: 0.1,
+            autoSkip: false,
+            color: '#33413c',
+            font: { weight: '600' },
+            callback: function(value) {
+              const rounded = Math.round(value * 10);
+              return (rounded % 10 === 0) ? Math.round(value * 10) / 10 : '';
+            }
+          },
+          grid: {
+            color: function(context) {
+              const rounded = Math.round(context.tick.value * 10);
+              if (rounded % 10 === 0) return '#9a9a8e';
+              if (rounded % 5 === 0) return '#c4c4ba';
+              return '#e4e4dc';
+            }
+          }
+        },
+        x: { offset: true, ticks: { display: false }, grid: { display: false } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+function updateChart() {
+  const data = buildChartData();
+  chart.data.labels = data.labels;
+  chart.data.datasets[0].data = data.high;
+  chart.data.datasets[1].data = data.low;
+  chart.data.datasets[2].data = data.now;
+  chart.update();
+}
+
+async function renderMonth() {
+  document.getElementById('monthLabel').textContent = monthLabelText();
+  await loadMonth();
+  updateChartTitle();
+  buildDateRow();
+  buildShiftRow();
+  buildStaffRow();
+  buildStampRow();
+  buildTable();
+  buildChart();
+}
+
+document.getElementById('prevBtn').addEventListener('click', () => {
+  state.month -= 1;
+  if (state.month < 1) { state.month = 12; state.year -= 1; }
+  renderMonth();
+});
+document.getElementById('nextBtn').addEventListener('click', () => {
+  state.month += 1;
+  if (state.month > 12) { state.month = 1; state.year += 1; }
+  renderMonth();
+});
+document.getElementById('pharmacist').addEventListener('input', (e) => {
+  state.pharmacist = e.target.value;
+  scheduleSave();
+});
+document.getElementById('pharmacistLicense').addEventListener('input', (e) => {
+  state.pharmacistLicense = e.target.value;
+  scheduleSave();
+});
+document.getElementById('seqInput').addEventListener('input', (e) => {
+  state.seq = e.target.value.trim();
+  updateChartTitle();
+  scheduleSave();
+});
+document.getElementById('addStaffCode').addEventListener('click', () => {
+  staffCodes.push({ code: '', name: '' });
+  saveStaffCodes();
+  buildStaffCodeUI();
+});
+document.getElementById('printBtn').addEventListener('click', () => window.print());
+document.getElementById('exportPdfBtn').addEventListener('click', async () => {
+  const target = document.getElementById('chartCard');
+  const toast = document.getElementById('pdfToast');
+  toast.style.display = 'flex';
+  target.classList.add('exporting');
+  try {
+    const canvasImg = await html2canvas(target, { scale: 3, backgroundColor: '#ffffff' });
+    const imgData = canvasImg.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 24;
+    const ratio = Math.min((pageWidth - margin * 2) / canvasImg.width, (pageHeight - margin * 2) / canvasImg.height);
+    const w = canvasImg.width * ratio;
+    const h = canvasImg.height * ratio;
+    const x = (pageWidth - w) / 2;
+    const y = (pageHeight - h) / 2;
+    pdf.addImage(imgData, 'PNG', x, y, w, h);
+    const fridge = fridges.find(f => f.id === state.fridgeId);
+    const fridgeName = fridge ? fridge.name : '';
+    pdf.save(rocYear(state.year) + '年' + state.month + '月' + fridgeName + '溫度登記表' + (state.seq ? '(' + state.seq + ')' : '') + '.pdf');
+  } catch (err) {
+    toast.innerHTML = '<i class="ti ti-alert-triangle"></i>PDF 產生失敗，請再試一次';
+    setTimeout(() => { toast.style.display = 'none'; toast.innerHTML = '<i class="ti ti-loader"></i>PDF 產生中…'; }, 2500);
+    target.classList.remove('exporting');
+    return;
+  }
+  target.classList.remove('exporting');
+  toast.style.display = 'none';
+});
+document.getElementById('exportCsv').addEventListener('click', () => {
+  const n = daysInMonth(state.year, state.month);
+  let csv = '日期,班別,高溫(℃),低溫(℃),現在溫度(℃),人員,狀態\n';
+  for (let d = 1; d <= n; d++) {
+    ['上午', '下午'].forEach(shift => {
+      const e = getEntry(d, shift);
+      const status = getStatus(e);
+      const statusText = status === 'abnormal' ? '異常' : status === 'normal' ? '正常' : '';
+      csv += [d, shift, e.high, e.low, e.now, e.staff, statusText].join(',') + '\n';
+    });
+  }
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const fridge = fridges.find(f => f.id === state.fridgeId);
+  const fridgeName = fridge ? fridge.name : '';
+  a.download = state.year + '年' + state.month + '月' + fridgeName + '溫度登記表.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+async function init() {
+  await loadFridges();
+  state.fridgeId = fridges[0].id;
+  buildFridgeSelect();
+  attachFridgeBarEvents();
+  await loadStaffCodes();
+  buildStaffCodeUI();
+  await renderMonth();
+}
+init();
+</script>
+</body>
+</html>
