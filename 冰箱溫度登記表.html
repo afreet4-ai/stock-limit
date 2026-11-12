@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1F6F63">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="冰箱溫度">
 <title>冰箱溫度日誌</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -69,6 +73,10 @@ section{background:var(--surface);border:1px solid var(--border);border-radius:1
 .stamp-form{display:flex;flex-direction:column;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 8px;}
 .stamp-form input{width:88px;height:26px;font-size:12px;border:1px solid var(--border);border-radius:5px;background:var(--bg);color:var(--ink);padding:0 6px;}
 .stamp-form button{height:24px;border:none;border-radius:5px;background:var(--teal);color:#fff;font-size:11px;cursor:pointer;}
+.chart-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.chart-scroll-inner{min-width:880px;}
+#chartCard.exporting{width:1100px;max-width:none;}
+#chartCard.exporting .chart-scroll{overflow:visible;}
 .chart-row{display:flex;gap:14px;background:#ffffff;border-radius:8px;padding:8px;}
 .chart-legend-v{display:flex;flex-direction:column;gap:12px;justify-content:center;min-width:74px;}
 .chart-legend-v span{display:flex;align-items:center;font-size:12px;color:#5B6B65;}
@@ -132,7 +140,7 @@ input.num:focus,input.staff:focus{outline:none;border-color:var(--teal);box-shad
     <button id="prevBtn" aria-label="上個月"><i class="ti ti-chevron-left"></i>上個月</button>
     <div class="month-label" id="monthLabel">—</div>
     <button id="nextBtn" aria-label="下個月">下個月<i class="ti ti-chevron-right"></i></button>
-    <div class="save-indicator" id="saveIndicator"><i class="ti ti-cloud-check"></i><span>已自動儲存（共用）</span></div>
+    <div class="save-indicator" id="saveIndicator"><i class="ti ti-cloud-check"></i><span>已自動儲存（本機）</span></div>
   </div>
 
   <section id="chartCard">
@@ -143,6 +151,7 @@ input.num:focus,input.staff:focus{outline:none;border-color:var(--teal);box-shad
         <button id="exportPdfBtn"><i class="ti ti-file-type-pdf"></i>匯出PDF</button>
       </div>
     </div>
+    <div class="chart-scroll"><div class="chart-scroll-inner">
     <div class="chart-row">
       <div class="chart-legend-v">
         <span><i class="dot" style="background:#2b2b2b"></i>高溫</span>
@@ -161,6 +170,7 @@ input.num:focus,input.staff:focus{outline:none;border-color:var(--teal);box-shad
         </div>
       </div>
     </div>
+    </div></div>
   </section>
 
 
@@ -189,6 +199,9 @@ input.num:focus,input.staff:focus{outline:none;border-color:var(--teal);box-shad
     <div class="actions">
       <button id="exportCsv"><i class="ti ti-download"></i>匯出CSV</button>
       <button id="printBtn"><i class="ti ti-printer"></i>列印</button>
+      <button id="backupBtn"><i class="ti ti-database-export"></i>備份</button>
+      <button id="restoreBtn"><i class="ti ti-database-import"></i>還原</button>
+      <input type="file" id="restoreFile" accept=".json,application/json" style="display:none;">
     </div>
   </section>
 </div>
@@ -199,6 +212,17 @@ input.num:focus,input.staff:focus{outline:none;border-color:var(--teal);box-shad
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
+// 本機儲存（localStorage）：資料存在這支手機／瀏覽器內，不需登入
+const store = {
+  async get(key) {
+    try { const v = localStorage.getItem(key); return v === null ? null : { key, value: v }; }
+    catch (e) { return null; }
+  },
+  async set(key, value) {
+    try { localStorage.setItem(key, value); return { key, value }; }
+    catch (e) { throw e; }
+  }
+};
 const today = new Date();
 const state = { year: today.getFullYear(), month: today.getMonth() + 1, fridgeId: '', entries: {}, pharmacist: '', pharmacistLicense: '', stamps: {}, seq: '' };
 let saveTimer = null;
@@ -233,10 +257,10 @@ async function loadMonth() {
   state.stamps = {};
   state.seq = '7';
   try {
-    let res = await window.storage.get(storageKey(), true);
+    let res = await store.get(storageKey(), true);
     if ((!res || !res.value) && fridges.length && state.fridgeId === fridges[0].id) {
       try {
-        const legacyRes = await window.storage.get('fridge-log:' + state.year + '-' + state.month, true);
+        const legacyRes = await store.get('fridge-log:' + state.year + '-' + state.month, true);
         if (legacyRes && legacyRes.value) res = legacyRes;
       } catch (err2) { /* no legacy data */ }
     }
@@ -272,7 +296,7 @@ let fridges = [];
 
 async function loadFridges() {
   try {
-    const res = await window.storage.get(FRIDGE_KEY, true);
+    const res = await store.get(FRIDGE_KEY, true);
     if (res && res.value) {
       const parsed = JSON.parse(res.value);
       if (Array.isArray(parsed) && parsed.length) { fridges = parsed; return; }
@@ -282,7 +306,7 @@ async function loadFridges() {
 }
 
 async function saveFridges() {
-  try { await window.storage.set(FRIDGE_KEY, JSON.stringify(fridges), true); } catch (err) { /* ignore */ }
+  try { await store.set(FRIDGE_KEY, JSON.stringify(fridges), true); } catch (err) { /* ignore */ }
 }
 
 function buildFridgeSelect() {
@@ -374,7 +398,7 @@ const STAFF_CODE_KEY = 'fridge-log:staff-codes';
 
 async function loadStaffCodes() {
   try {
-    const res = await window.storage.get(STAFF_CODE_KEY, true);
+    const res = await store.get(STAFF_CODE_KEY, true);
     if (res && res.value) {
       staffCodes = JSON.parse(res.value);
       return;
@@ -388,7 +412,7 @@ async function loadStaffCodes() {
 }
 
 async function saveStaffCodes() {
-  try { await window.storage.set(STAFF_CODE_KEY, JSON.stringify(staffCodes), true); } catch (err) { /* ignore */ }
+  try { await store.set(STAFF_CODE_KEY, JSON.stringify(staffCodes), true); } catch (err) { /* ignore */ }
 }
 
 function codeToName(raw) {
@@ -456,7 +480,7 @@ function scheduleSave() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
-      await window.storage.set(storageKey(), JSON.stringify({ entries: state.entries, pharmacist: state.pharmacist, pharmacistLicense: state.pharmacistLicense, stamps: state.stamps, seq: state.seq }), true);
+      await store.set(storageKey(), JSON.stringify({ entries: state.entries, pharmacist: state.pharmacist, pharmacistLicense: state.pharmacistLicense, stamps: state.stamps, seq: state.seq }), true);
       indicator.querySelector('span').textContent = '已自動儲存';
     } catch (err) {
       indicator.querySelector('span').textContent = '儲存失敗';
@@ -778,6 +802,8 @@ document.getElementById('exportPdfBtn').addEventListener('click', async () => {
   toast.style.display = 'flex';
   target.classList.add('exporting');
   try {
+    if (chart) chart.resize();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     const canvasImg = await html2canvas(target, { scale: 3, backgroundColor: '#ffffff' });
     const imgData = canvasImg.toDataURL('image/png');
     const { jsPDF } = window.jspdf;
@@ -798,9 +824,11 @@ document.getElementById('exportPdfBtn').addEventListener('click', async () => {
     toast.innerHTML = '<i class="ti ti-alert-triangle"></i>PDF 產生失敗，請再試一次';
     setTimeout(() => { toast.style.display = 'none'; toast.innerHTML = '<i class="ti ti-loader"></i>PDF 產生中…'; }, 2500);
     target.classList.remove('exporting');
+    if (chart) chart.resize();
     return;
   }
   target.classList.remove('exporting');
+  if (chart) chart.resize();
   toast.style.display = 'none';
 });
 document.getElementById('exportCsv').addEventListener('click', () => {
@@ -823,6 +851,42 @@ document.getElementById('exportCsv').addEventListener('click', () => {
   a.download = state.year + '年' + state.month + '月' + fridgeName + '溫度登記表.csv';
   a.click();
   URL.revokeObjectURL(url);
+});
+
+
+document.getElementById('backupBtn').addEventListener('click', () => {
+  const dump = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.indexOf('fridge-log:') === 0) dump[k] = localStorage.getItem(k);
+  }
+  const blob = new Blob([JSON.stringify(dump)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '冰箱溫度登記表_備份_' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('restoreBtn').addEventListener('click', () => document.getElementById('restoreFile').click());
+document.getElementById('restoreFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const dump = JSON.parse(reader.result);
+      Object.keys(dump).forEach(k => { if (k.indexOf('fridge-log:') === 0) localStorage.setItem(k, dump[k]); });
+      await loadFridges();
+      if (!fridges.find(f => f.id === state.fridgeId)) state.fridgeId = fridges[0].id;
+      buildFridgeSelect();
+      await loadStaffCodes();
+      buildStaffCodeUI();
+      await renderMonth();
+    } catch (err) { /* invalid file */ }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
 });
 
 async function init() {
