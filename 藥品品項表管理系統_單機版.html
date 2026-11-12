@@ -243,9 +243,10 @@
 
   /* print-only view */
   .print-only{ display:none; }
+  @page{ size:A4 portrait; margin:6mm; } /* 列印／另存 PDF：A4，四邊 6mm，和「下載 PDF」的邊界一致 */
   .print-only.offscreen-render{
     display:block; position:fixed; left:-10000px; top:0; z-index:-1;
-    width:794px; background:#fff; margin:0; padding:0;
+    width:var(--print-w, 794px); background:#fff; margin:0; padding:0;
   }
   .print-only.offscreen-render .print-page:first-child{
     page-break-before:avoid; break-before:avoid; margin-top:0;
@@ -294,6 +295,8 @@
   /* 列印／PDF 內容：英文與數字用 Times New Roman（中文自動使用後面的中文字體），所有文字黑色 */
   #printView{ font-family:'Times New Roman', Times, 'Noto Sans TC', 'Microsoft JhengHei', '微軟正黑體', sans-serif; }
   #printView, #printView *{ color:#000; }
+  /* 讓另存的 PDF 文字可被搜尋：取消字距（字距會讓 PDF 把一個詞拆成單字）與連字（fi、fl 等） */
+  #printView, #printView *{ letter-spacing:normal !important; font-variant-ligatures:none; font-feature-settings:'liga' 0, 'clig' 0; }
   #printView .print-table tr.print-level td{ color:#fff; }          /* 深色橫幅底色維持白字，才看得清楚 */
   #printView .print-table tr.print-filler td{ color:transparent; }  /* 空白補列維持不顯示文字 */
   .print-page.page-break{ page-break-after:always; break-after:page; }
@@ -396,7 +399,7 @@
       <button class="side-action-btn" id="coverBtn">📋 品項表封面總覽</button>
       <button class="side-action-btn" id="changeLogBtn">🕓 本次異動明細</button>
       <button class="side-action-btn" id="changeStatsBtn">📊 品項數異動統計</button>
-      <button class="side-action-btn" id="printAllBtn">🖨️ 一鍵列印全部分類</button>
+      <button class="side-action-btn" id="printAllBtn" title="想要檔案小、文字清晰的 PDF：按此按鈕，在列印視窗的「目的地」選「另存為 PDF」">🖨️ 一鍵列印全部分類</button>
       <button class="side-action-btn" id="downloadPdfBtn">📄 一鍵下載全分類 PDF</button>
       <button class="side-action-btn" id="exportAllBtn">⬇️ 下載完整 Excel</button>
       <button class="side-action-btn" id="exportPrintStyleBtn">⬇️ 下載列印格式 Excel</button>
@@ -2000,201 +2003,169 @@ async function downloadPrintStyleExcel(){
   coverWs.getColumn(5).width = 15.8; // 刻意與左欄些微不同，避開 ExcelJS 相鄰欄位同寬會丟失其一的問題
   applyPageSetup(coverWs);
 
-  // ---- 各分類明細頁 ----
+  // ---- 各分類明細頁：分頁、欄位排列與列印／PDF 完全相同（每頁三欄、每欄固定列數、每頁都有標題與表頭）----
   CATEGORIES.forEach(cat=>{
     state.activeCat = cat;
-    const isLevelType = categoryMode(cat) === 'level-type';
     const items = getFilteredSorted();
     if(!items.length) return; // 跟列印一樣，沒有品項的分類不產生工作表
 
-    const hasGroup = categoryHasGroupTag(cat);
-    const numCols = printColumnsFor(cat);
-    const colAssignment = printColumnAssignmentFor(cat);
+    const pages = parsePrintPagesHtml(buildCategoryPagesHtml(true));
+    if(!pages.length) return;
 
-    // 計算序號重置與各種標題列的起始點（跟列印版面用同一套邏輯）
-    let seqCounter = 0;
-    let lastStatus = null, lastLevel = null, lastType = null, lastGroup = null;
-    const processed = items.map(it=>{
-      let isLevelStart = false, isTypeStart = false, isGroupStart = false;
-      if(isLevelType){
-        if(it.level !== lastLevel){ isLevelStart = true; lastLevel = it.level; lastType = null; lastGroup = null; }
-        if(it.type){
-          if(it.type !== lastType){ isTypeStart = true; lastType = it.type; lastGroup = null; seqCounter = 1; }
-          else{ seqCounter += 1; }
-        }else{
-          seqCounter = isLevelStart ? 1 : seqCounter + 1;
-        }
-        if(hasGroup && it.group && it.group !== lastGroup){ isGroupStart = true; lastGroup = it.group; }
-      }else{
-        if(it.status !== lastStatus){ isTypeStart = true; lastStatus = it.status; seqCounter = 1; }
-        else{ seqCounter += 1; }
-      }
-      return { item: it, seq: seqCounter, isLevelStart, isTypeStart, isGroupStart };
-    });
-
-    // 分配到第幾組欄位：Excel 沒有版面高度限制，所以一律用「每個等級固定一欄、往下延伸到底」
-    const excelAssignment = EXCEL_COLUMN_ASSIGNMENT[cat] || colAssignment;
-    let buckets;
-    if(excelAssignment){
-      buckets = Array.from({length: numCols}, ()=> []);
-      processed.forEach(rec=>{
-        const key = isLevelType ? rec.item.level : rec.item.status;
-        const idx = (excelAssignment[key] !== undefined) ? excelAssignment[key] : 0;
-        buckets[Math.min(idx, numCols - 1)].push(rec);
-      });
-    }else{
-      const per = Math.ceil(processed.length / numCols) || 1;
-      buckets = [];
-      for(let i = 0; i < numCols; i++){
-        buckets.push(processed.slice(i * per, (i + 1) * per));
-      }
-    }
-
-    // 把每一組轉成「序號、四碼、藥品名稱、藥站1、藥站2」的列陣列，並記錄哪些列是標題橫幅列
-    function bucketToBlock(bucket){
-      const rows = [];
-      const bannerRowIdx = [];
-      bucket.forEach(rec=>{
-        const it = rec.item;
-        if(isLevelType && rec.isLevelStart){
-          bannerRowIdx.push(rows.length);
-          rows.push({ banner: levelBannerText(cat, items, it.level) });
-        }
-        if(rec.isTypeStart && !(!isLevelType && it.status === '常備')){
-          const title = isLevelType ? it.type : (STATUS_META[it.status] || {label: it.status}).label;
-          bannerRowIdx.push(rows.length);
-          rows.push({ banner: title });
-        }
-        if(rec.isGroupStart){
-          bannerRowIdx.push(rows.length);
-          rows.push({ banner: it.group });
-        }
-        rows.push({ seq: rec.seq, code: it.code, name: it.name, station1: it.station1||'', station2: it.station2||'', highlight: !!(it.isNew || it.isEdited) });
-      });
-      return { rows, bannerRowIdx };
-    }
-
-    const blocks = buckets.map(bucketToBlock);
-    const maxRows = Math.max(0, ...blocks.map(b => b.rows.length));
-    const BLOCK_WIDTH = 5; // 序號、四碼、藥品名稱、藥站1、藥站2（區塊間無間隔欄，與附件範本一致）
-
+    const BLOCK_WIDTH = 5; // 序號、四碼、藥品名稱、藥站1、藥站2
+    const numBlocks = Math.max(...pages.map(pg => pg.tables.length));
+    const totalCols = numBlocks * BLOCK_WIDTH;
     const ws = wb.addWorksheet(cat.length > 31 ? cat.slice(0,31) : cat);
-    const totalCols = blocks.length * BLOCK_WIDTH;
 
-    // 第1列：大標題（機構名稱 分類藥品 製表日期）
-    ws.mergeCells(1, 1, 1, totalCols);
-    const titleCell = ws.getCell(1, 1);
-    titleCell.value = (orgName ? orgName + '　　' : '') + `${cat}藥品　　　製表日期：${rocDateStr()}`;
-    titleCell.font = FONT_HEADER;
-    titleCell.alignment = CENTER;
-    titleCell.border = THIN_BOTTOM;
-    ws.getRow(1).height = 30;
+    // 名稱欄寬：依最長藥名（括號內 6pt 小字只算 0.55 個字寬）；字體 11pt
+    const NAME_CHAR_W = 0.85 * 1.1;
+    const effLen = (name)=>{
+      const n = name || '';
+      const paren = (n.match(/[（(][^（）()]*[）)]/g) || []).join('').length;
+      return (n.length - paren) + paren * 0.55;
+    };
+    const maxNameLen = Math.max(8, ...items.map(it => effLen(it.name)));
+    const nameWidth = Math.min(40, Math.max(15, Math.round(maxNameLen * NAME_CHAR_W)));
 
-    // 第2列：各區塊子標題（藥品四碼／藥品名稱／藥站）
-    blocks.forEach((b, bi)=>{
-      const base = bi * BLOCK_WIDTH;
-      const headers = ['', '藥品四碼', '藥品名稱', '藥站', ''];
-      headers.forEach((h, ci)=>{
-        const cell = ws.getCell(2, base + ci + 1);
-        cell.value = h;
-        cell.font = FONT_SUBHEADER;
-        cell.alignment = CENTER;
-        cell.border = THIN_ALL;
-      });
-      ws.mergeCells(2, base + 4, 2, base + 5); // 藥站1/藥站2 合併成一欄「藥站」
-    });
-    ws.getRow(2).height = 21;
+    const FILL_LEVEL = { type:'pattern', pattern:'solid', fgColor:{argb:'FF333333'}, bgColor:{argb:'FF333333'} };
+    const FILL_GROUP_PDF = { type:'pattern', pattern:'solid', fgColor:{argb:'FFDFE5E4'}, bgColor:{argb:'FFDFE5E4'} };
+    const FILL_SUBGROUP = { type:'pattern', pattern:'solid', fgColor:{argb:'FFF0F0F0'}, bgColor:{argb:'FFF0F0F0'} };
+    const ROW_H = 19;
+    let rowNo = 1;
 
-    // 第3列開始：資料／標題橫幅列
-    for(let r = 0; r < maxRows; r++){
-      const excelRow = r + 3;
-      blocks.forEach((b, bi)=>{
+    pages.forEach((pg, pi)=>{
+      // 標題列（機構名稱 分類藥品 製表日期（第N／M頁））
+      ws.mergeCells(rowNo, 1, rowNo, totalCols);
+      const titleCell = ws.getCell(rowNo, 1);
+      titleCell.value = pg.title;
+      titleCell.font = FONT_HEADER;
+      titleCell.alignment = CENTER;
+      ws.getRow(rowNo).height = 26;
+      rowNo++;
+
+      // 說明列（■ 反黃處為新增／異動品項）
+      ws.mergeCells(rowNo, 1, rowNo, totalCols);
+      const legendCell = ws.getCell(rowNo, 1);
+      legendCell.value = pg.legend;
+      legendCell.font = { name: '標楷體', size: 10, bold: true };
+      legendCell.alignment = CENTER;
+      ws.getRow(rowNo).height = 16;
+      rowNo++;
+
+      // 表頭列
+      for(let bi = 0; bi < numBlocks; bi++){
         const base = bi * BLOCK_WIDTH;
-        const rec = b.rows[r];
-        if(!rec) return;
-        if(rec.banner !== undefined){
-          ws.mergeCells(excelRow, base + 2, excelRow, base + 5); // 合併四碼/名稱/藥站1/藥站2，不含序號欄
-          const cell = ws.getCell(excelRow, base + 2);
-          cell.value = rec.banner;
-          cell.font = FONT_GROUP_LABEL;
+        ['序號','四碼','藥品名稱','藥站1','藥站2'].forEach((h, ci)=>{
+          const cell = ws.getCell(rowNo, base + ci + 1);
+          cell.value = h;
+          cell.font = ci === 0 ? { ...FONT_IDX, bold: true } : { ...FONT_SUBHEADER, bold: true };
           cell.alignment = CENTER;
-          cell.fill = FILL_GROUP;
-          for(let cc = base + 1; cc <= base + 5; cc++){
-            ws.getCell(excelRow, cc).border = THIN_ALL;
-            ws.getCell(excelRow, cc).fill = FILL_GROUP;
-          }
-        }else{
-          // 新增／異動品項：整列（含序號欄，覆蓋原本的灰底）反黃，與列印版面「■ 反黃處為新增／異動品項」一致
-          const rowFill = rec.highlight ? FILL_HIGHLIGHT : null;
+          cell.fill = FILL_IDX;
+          cell.border = THIN_ALL;
+        });
+      }
+      ws.getRow(rowNo).height = 21;
+      rowNo++;
 
-          const idxCell = ws.getCell(excelRow, base + 1);
+      // 資料列（含標題橫幅列與補滿的空白列，每欄列數固定，與列印版面一致）
+      const nRows = Math.max(...pg.tables.map(t => t.rows.length));
+      for(let r = 0; r < nRows; r++){
+        let lines = 1;
+        pg.tables.forEach((tbl, ti)=>{
+          const base = ti * BLOCK_WIDTH;
+          const rec = tbl.rows[r];
+          if(!rec) return;
+          const setBorderAll = ()=>{ for(let cc = base + 1; cc <= base + BLOCK_WIDTH; cc++) ws.getCell(rowNo, cc).border = THIN_ALL; };
+
+          if(rec.type === 'filler'){
+            for(let cc = 1; cc <= BLOCK_WIDTH; cc++){
+              const cell = ws.getCell(rowNo, base + cc);
+              cell.border = THIN_ALL;
+              if(cc === 1) cell.fill = FILL_IDX;
+            }
+            return;
+          }
+          if(rec.type === 'level' || rec.type === 'group' || rec.type === 'subgroup'){
+            ws.mergeCells(rowNo, base + 2, rowNo, base + BLOCK_WIDTH); // 橫幅合併四碼～藥站2，不含序號欄
+            const cell = ws.getCell(rowNo, base + 2);
+            cell.value = rec.text;
+            cell.alignment = CENTER;
+            if(rec.type === 'level'){
+              cell.font = { name: '標楷體', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+              cell.fill = FILL_LEVEL;
+            }else{
+              cell.font = { name: '標楷體', size: 11, bold: true };
+              cell.fill = rec.type === 'group' ? FILL_GROUP_PDF : FILL_SUBGROUP;
+            }
+            setBorderAll();
+            const seqCell = ws.getCell(rowNo, base + 1);
+            seqCell.fill = FILL_IDX;
+            return;
+          }
+
+          // 一般品項（新增／異動品項整列反黃，含序號欄）
+          const rowFill = rec.highlight ? FILL_HIGHLIGHT : null;
+          const idxCell = ws.getCell(rowNo, base + 1);
           idxCell.value = rec.seq;
           idxCell.font = FONT_IDX;
           idxCell.alignment = CENTER;
           idxCell.fill = rowFill || FILL_IDX;
           idxCell.border = THIN_ALL;
 
-          const codeCell = ws.getCell(excelRow, base + 2);
+          const codeCell = ws.getCell(rowNo, base + 2);
           codeCell.value = rec.code;
           codeCell.font = FONT_CODE;
           codeCell.alignment = LEFT;
           codeCell.border = THIN_ALL;
           if(rowFill) codeCell.fill = rowFill;
 
-          const nameCell = ws.getCell(excelRow, base + 3);
-          nameCell.value = rec.name;
+          const nameCell = ws.getCell(rowNo, base + 3);
+          const hasSmall = rec.runs.some(x => x.small);
+          nameCell.value = hasSmall
+            ? { richText: rec.runs.filter(x => x.text).map(x => ({ text: x.text, font: { name: 'Times New Roman', size: x.small ? 6 : 11 } })) }
+            : rec.name;
           nameCell.font = FONT_NAME;
           nameCell.alignment = LEFT;
           nameCell.border = THIN_ALL;
           if(rowFill) nameCell.fill = rowFill;
 
-          const st1Cell = ws.getCell(excelRow, base + 4);
-          st1Cell.value = rec.station1;
-          st1Cell.font = FONT_STATION;
-          st1Cell.alignment = CENTER;
-          st1Cell.border = THIN_ALL;
-          if(rowFill) st1Cell.fill = rowFill;
-
-          const st2Cell = ws.getCell(excelRow, base + 5);
-          st2Cell.value = rec.station2;
-          st2Cell.font = FONT_STATION;
-          st2Cell.alignment = CENTER;
-          st2Cell.border = THIN_ALL;
-          if(rowFill) st2Cell.fill = rowFill;
-        }
-      });
-    }
-
-    // 欄寬：名稱欄依該分類最長的藥品名稱自動調整，其餘維持固定窄欄
-    // 名稱字體放大後（10→11），欄寬等比例放大，避免名稱被截斷
-    const NAME_CHAR_W = 0.85 * 1.1;
-    const maxNameLen = Math.max(8, ...items.map(it => (it.name||'').length));
-    const nameWidth = Math.min(40, Math.max(15, Math.round(maxNameLen * NAME_CHAR_W)));
-    blocks.forEach((b, bi)=>{
-      const base = bi * BLOCK_WIDTH;
-      // 注意：ExcelJS（目前使用版本）寫入欄寬時有兩個已驗證過的怪異行為：
-      // ①欄寬數值剛好等於整數 9 時會被靜默丟棄（還原成預設寬度）；
-      // ②相鄰欄位寬度完全相同時，第二個欄位的寬度也會被丟棄。
-      // 以下刻意避開「剛好是 9」與「相鄰欄位數值完全相同」，實際視覺效果幾乎無差異。
-      ws.getColumn(base + 1).width = 3.2;     // 序號
-      ws.getColumn(base + 2).width = 9.2;     // 四碼
-      ws.getColumn(base + 3).width = nameWidth; // 藥品名稱
-      ws.getColumn(base + 4).width = 5.4;     // 藥站1
-      ws.getColumn(base + 5).width = 5.6;     // 藥站2
+          if(rec.mergedStations){
+            ws.mergeCells(rowNo, base + 4, rowNo, base + 5);
+            const stCell = ws.getCell(rowNo, base + 4);
+            stCell.value = rec.st1;
+            stCell.font = FONT_STATION;
+            stCell.alignment = LEFT;
+            if(rowFill) stCell.fill = rowFill;
+            ws.getCell(rowNo, base + 4).border = THIN_ALL;
+            ws.getCell(rowNo, base + 5).border = THIN_ALL;
+            if(rowFill) ws.getCell(rowNo, base + 5).fill = rowFill;
+          }else{
+            [[4, rec.st1], [5, rec.st2]].forEach(([off, val])=>{
+              const c = ws.getCell(rowNo, base + off);
+              c.value = val;
+              c.font = FONT_STATION;
+              c.alignment = CENTER;
+              c.border = THIN_ALL;
+              if(rowFill) c.fill = rowFill;
+            });
+          }
+          if(effLen(rec.name) * NAME_CHAR_W > nameWidth + 0.5) lines = 2; // 名稱超過欄寬需換行時，列高加倍避免被截掉
+        });
+        ws.getRow(rowNo).height = ROW_H * lines - (lines > 1 ? 4 : 0);
+        rowNo++;
+      }
+      if(pi < pages.length - 1) ws.getRow(rowNo - 1).addPageBreak(); // 每一頁固定獨立一張，與 PDF 分頁相同
     });
 
-    // 資料列列高（原為預設高度，略微加高）；名稱超過欄寬而需換行的列加倍，避免文字被截掉
-    const ROW_H = 19;
-    for(let r = 0; r < maxRows; r++){
-      let lines = 1;
-      blocks.forEach(b=>{
-        const rec = b.rows[r];
-        if(rec && rec.banner === undefined && (rec.name || '').length * NAME_CHAR_W > nameWidth + 0.5) lines = 2;
-      });
-      ws.getRow(r + 3).height = ROW_H * lines - (lines > 1 ? 4 : 0);
+    // 欄寬（避開 ExcelJS「剛好等於9」與「相鄰欄位同寬」會被丟棄的怪癖）
+    for(let bi = 0; bi < numBlocks; bi++){
+      const base = bi * BLOCK_WIDTH;
+      ws.getColumn(base + 1).width = 3.2;       // 序號
+      ws.getColumn(base + 2).width = 9.2;       // 四碼
+      ws.getColumn(base + 3).width = nameWidth; // 藥品名稱
+      ws.getColumn(base + 4).width = 5.4;       // 藥站1
+      ws.getColumn(base + 5).width = 5.6;       // 藥站2
     }
-
-    ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 2 }]; // 凍結標題列，往下捲動時標題仍可見
     applyPageSetup(ws);
   });
 
@@ -2299,6 +2270,41 @@ function printNameHtml(name){
     last = m.index + m[0].length;
   }
   return out + escapeHtml(src.slice(last));
+}
+
+// 解析列印版面（buildCategoryPagesHtml 產生的 HTML）成資料結構，讓 Excel 與列印／PDF 使用完全相同的分頁與欄位排列
+function parsePrintPagesHtml(html){
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  return Array.from(doc.querySelectorAll('.print-page')).map(pg=>{
+    const tables = Array.from(pg.querySelectorAll('.print-table')).map(t=>{
+      const rows = Array.from(t.querySelectorAll('tbody tr')).map(tr=>{
+        const cls = tr.className || '';
+        if(cls.includes('print-filler')) return { type: 'filler' };
+        if(cls.includes('print-level')) return { type: 'level', text: tr.children[1].textContent };
+        if(cls.includes('print-subgroup')) return { type: 'subgroup', text: tr.children[1].textContent };
+        if(cls.includes('print-group')) return { type: 'group', text: tr.children[1].textContent };
+        const nameTd = tr.querySelector('td.p-name');
+        const stTds = tr.querySelectorAll('td.p-station');
+        return {
+          type: 'item',
+          seq: Number(tr.querySelector('td.p-seq').textContent),
+          code: tr.querySelector('td.p-code').textContent,
+          name: nameTd.textContent,
+          runs: Array.from(nameTd.childNodes).map(n => ({ text: n.textContent, small: n.nodeType === 1 && n.classList.contains('p-note') })),
+          st1: stTds[0] ? stTds[0].textContent : '',
+          st2: stTds[1] ? stTds[1].textContent : '',
+          mergedStations: stTds.length === 1,
+          highlight: cls.includes('print-highlight')
+        };
+      });
+      return { rows };
+    });
+    return {
+      title: pg.querySelector('.print-title-line').textContent,
+      legend: pg.querySelector('.print-legend-line').textContent,
+      tables
+    };
+  });
 }
 
 function nameFontSize(text){
@@ -2697,16 +2703,19 @@ const PRINT_NAME_FONT_TARGET = 10.5;  // 藥品名稱目標字體（pt）
 const PRINT_NAME_FONT_LEVELS = [10.5, 10, 9.5, 9, 8.5, 8, 7.5, 6.9]; // pt，由大到小（最後一個＝原本大小）
 const PRINT_PAD_LEVELS = [6, 5, 4.5, 4, 3.5, 3];  // 列上下留白 px，由寬到窄
 const PRINT_PAGE_LIMIT_PDF = 1130;   // 下載 PDF：A4 扣除上下各 6mm 邊界後的可用高度（以 794px 寬換算）
-const PRINT_PAGE_LIMIT_PRINT = 1040; // 瀏覽器直接列印：保守值（預設邊界較大）
+const PRINT_PAGE_LIMIT_PRINT = 1065; // 瀏覽器列印／另存 PDF：A4 扣掉四邊 6mm 後可用高度 1077px，再留一點安全空間
+const PRINT_WIDTH_PDF = 794;   // 下載 PDF 的版面寬度（px）
+const PRINT_WIDTH_PRINT = 748; // 列印／另存 PDF 的版面寬度：A4 210mm 扣掉左右各 6mm＝198mm ≈ 748px
 // 每 1pt 對應的 px：PDF 以 794px 寬縮放成 198mm 寬，故 1pt 約 1.415px；瀏覽器列印為 100% 比例，1pt＝96/72 px
 const PRINT_PX_PER_PT_PDF = 794 / (198 / 25.4 * 72);
 const PRINT_PX_PER_PT_PRINT = 96 / 72;
-function fitPrintDensity(limitPx, pxPerPt){
+function fitPrintDensity(limitPx, pxPerPt, widthPx){
   const container = document.getElementById('printView');
   if(!container) return;
   const limit = limitPx || PRINT_PAGE_LIMIT_PRINT;
   const ppp = pxPerPt || PRINT_PX_PER_PT_PRINT;
   container.style.setProperty('--pt', ppp + 'px');
+  container.style.setProperty('--print-w', (widthPx || PRINT_WIDTH_PRINT) + 'px'); // 量測寬度＝實際輸出寬度
   const alreadyOffscreen = container.classList.contains('offscreen-render');
   if(!alreadyOffscreen) container.classList.add('offscreen-render');
 
@@ -2753,7 +2762,7 @@ function fitPrintDensity(limitPx, pxPerPt){
 // 每次要列印/輸出 PDF 前的收尾處理：先移除空白頁，再決定字體與列高，最後統一整頁列高。
 function finalizePrintView(forPdf){
   removeBlankPrintPages();
-  const chosen = fitPrintDensity(forPdf ? PRINT_PAGE_LIMIT_PDF : PRINT_PAGE_LIMIT_PRINT, forPdf ? PRINT_PX_PER_PT_PDF : PRINT_PX_PER_PT_PRINT);
+  const chosen = fitPrintDensity(forPdf ? PRINT_PAGE_LIMIT_PDF : PRINT_PAGE_LIMIT_PRINT, forPdf ? PRINT_PX_PER_PT_PDF : PRINT_PX_PER_PT_PRINT, forPdf ? PRINT_WIDTH_PDF : PRINT_WIDTH_PRINT);
   equalizeRowHeights();
   return chosen;
 }
