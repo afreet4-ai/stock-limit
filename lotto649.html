@@ -42,7 +42,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 </head>
 <body>
 <main>
-<h1>🎯 大樂透自動對獎 <span class="mu">v20</span></h1>
+<h1>🎯 大樂透自動對獎 <span class="mu">v21</span></h1>
 
 <div class="card">
   <div class="row" style="justify-content:space-between">
@@ -98,7 +98,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 <details class="card" id="mbox">
   <summary>開獎紀錄與手動輸入</summary>
   <div class="mu" id="dcnt" style="margin-top:8px"></div><div style="max-height:320px;overflow:auto"><table id="dl"></table></div>
-  <p class="mu">頭獎、貳獎、參獎、肆獎是浮動獎金，每期金額不同；中到時會顯示「待填」，請點上方列表的該期帶入表單，再填金額。</p>
+  <p class="mu">頭獎、貳獎、參獎、肆獎是浮動獎金，每期金額不同；中到時會顯示「待填」，請點上方列表的該期帶入表單，再填金額。列表中日期後面有 ⚠️ 的，表示不是週二或週五，請檢查是不是輸入錯誤。</p>
   <div class="row"><input id="mp" placeholder="期別（可自訂，如 1～10）"><input type="date" id="md"></div>
   <div class="row" style="margin-top:6px"><button class="g" id="suggest" type="button">帶入下一期（日期＋期別）</button></div>
   <div class="mu" style="margin-top:8px">開獎號碼（6 個＋特別號）</div>
@@ -277,6 +277,8 @@ function render(){
     <div class="row" style="justify-content:space-between"><div><input type="checkbox" data-sel="${s.id}" ${sel.has(String(s.id))?'checked':''} style="flex:none;padding:0;width:22px;height:22px;vertical-align:middle;margin-right:6px"><b>第${i+1}組</b> ${balls(s.n)}</div>
       <span class="tag ${done?'ok':''}">${done?(s.end&&today()>s.end?'已到期':'已完成'):'進行中'} ${spanTxt(s,e)}</span></div>
     <div class="mu">${esc(s.label||'')} 購買日 ${s.start}</div>
+    <div class="mu">目前設定：購買日 <b>${s.start}</b>｜迄日 <b>${s.end||'未設'}</b>｜期數上限 <b>${s.len>0?s.len:'未設'}</b>｜注數 <b>${s.qty||1}</b></div>
+    ${(s.len>0&&s.end&&schedCount(s.start,s.end)!==s.len)?`<div class="mu" style="color:#f59e0b">⚠️ 設定衝突：迄日 ${s.end} 之前只有 ${schedCount(s.start,s.end)} 個開獎日，但期數上限是 ${s.len}，實際只會計入較少的那個。請按「修改」，迄日和期數上限只留一個。</div>`:''}
     <div class="mu">${e.k?'計入 '+e.rows[0].d.d+' ～ '+e.rows[e.k-1].d.d+'，共 '+e.k+' 期':'尚無已開獎期數'}｜${s.len>0?'期數上限 '+s.len:'不限期數'}${s.qty>1?'｜<b>'+s.qty+' 注</b>（成本與獎金×'+s.qty+'）':''}</div>
     ${s.end?(()=>{const n=schedCount(s.start,s.end);return `<div class="mu">購買期間 ${s.start} ～ ${s.end}｜預估共 ${n} 期（以週二、週五推算）｜已開 ${e.k} 期${today()>s.end?'（已到期）':'，尚餘約 '+Math.max(0,n-e.k)+' 期'}</div>${isDD(s.end)?'':`<div style="color:#f59e0b" class="mu">⚠️ 迄日 ${s.end} 不是開獎日（週二、週五），實際最後一期是 ${prevDraw(s.end)}，下一個開獎日 ${nextSched(s.end)} 不會計入。要多買一期請把迄日改成開獎日，或改用「期數上限」。</div>`}`})():''}
     ${lastLine(s,e)}
@@ -312,7 +314,7 @@ function render(){
   const net=tp-tc;
   $('sum').innerHTML=`<div><span class="mu">總成本</span><b>${$$(tc)}</b></div><div><span class="mu">總中獎</span><b class="up">${$$(tp)}</b></div><div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div>`;
   $('dcnt').textContent='共 '+rangeAll()+'開獎紀錄（由新到舊，可捲動）';
-  $('dl').innerHTML='<tr><th>期別</th><th>日期</th><th>號碼</th></tr>'+all.map(d=>`<tr data-p="${d.d}" style="cursor:pointer"><td>${d.p}</td><td>${d.d.slice(5)}</td><td>${d.m.map(pad).join(' ')} +${pad(d.s)}</td></tr>`).join('');
+  $('dl').innerHTML='<tr><th>期別</th><th>日期</th><th>號碼</th></tr>'+all.map(d=>`<tr data-p="${d.d}" style="cursor:pointer"><td>${d.p}</td><td>${d.d.slice(5)}${isDD(d.d)?'':' ⚠️'}</td><td>${d.m.map(pad).join(' ')} +${pad(d.s)}</td></tr>`).join('');
 }
 
 // ---- actions ----
