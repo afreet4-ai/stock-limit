@@ -42,7 +42,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 </head>
 <body>
 <main>
-<h1>🎯 大樂透自動對獎 <span class="mu">v21</span></h1>
+<h1>🎯 大樂透自動對獎 <span class="mu">v23</span></h1>
 
 <div class="card">
   <div class="row" style="justify-content:space-between">
@@ -54,7 +54,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 <div class="card">
   <b>總計（所有組別）</b>
   <div class="sum" id="sum" style="margin-top:8px"></div>
-  <div class="mu" style="margin-top:6px">成本與中獎金額分開累計，金額為稅前。</div>
+  <div class="mu" style="margin-top:6px">成本與中獎金額分開計算，金額為稅前。有設期數或迄日的組別，成本＝期數×50元×注數（買入時就預付）；沒設期數的組別，成本依已開獎期數逐期累計。</div>
 </div>
 
 <div class="card" id="wins"></div>
@@ -153,14 +153,23 @@ function planRows(s,e){
   return out.reverse().join('');
 }
 function lastInfo(s,e){
-  if(!(s.len>0))return null;
-  if(e.k>=s.len)return{d:e.rows[s.len-1].d.d,est:false,left:0};
-  const base=e.k?addDays(e.rows[e.k-1].d.d,1):s.start;
-  return{d:endForCount(base,s.len-e.k),est:true,left:s.len-e.k};
+  if(s.len>0){
+    if(e.k>=s.len)return{d:e.rows[s.len-1].d.d,est:false,left:0,n:s.len};
+    const base=e.k?addDays(e.rows[e.k-1].d.d,1):s.start;
+    return{d:endForCount(base,s.len-e.k),est:true,left:s.len-e.k,n:s.len};
+  }
+  if(s.end){
+    const n=schedCount(s.start,s.end),d=prevDraw(s.end);
+    if(!n)return null;
+    const done=e.k&&e.rows[e.k-1].d.d>=d;
+    return{d,est:!done,left:Math.max(0,n-e.k),n};
+  }
+  return null;
 }
 function lastLine(s,e){
-  const l=lastInfo(s,e);if(!l)return '';
-  return `<div class="mu">最後一期（第 ${s.len} 期）開獎日：<b>${l.d}</b>${l.est?'（預估，依週二、週五推算；尚餘 '+l.left+' 期）':'（已開獎）'}</div>`;
+  const l=lastInfo(s,e);
+  if(!l)return `<div class="mu">未設定期數或迄日（不限期數），所以不顯示最後一期。要顯示請按「修改」，填「期數上限」。</div>`;
+  return `<div class="mu">最後一期（第 ${l.n} 期）開獎日：<b>${l.d}</b>${l.est?'（預估，依週二、週五推算；尚餘 '+l.left+' 期）':'（已開獎）'}</div>`;
 }
 const lastShort=(s,e)=>{const l=lastInfo(s,e);return l?'｜最後一期 '+l.d.slice(5)+(l.est?'(預估)':''):''};
 const cap=s=>s.len>0?s.len:Infinity;
@@ -201,9 +210,9 @@ function evalSet(s){
     const h=s.n.filter(x=>d.m.includes(x)).length,sp=s.n.includes(d.s),t=tier(h,sp);
     return{d,h,sp,t,amt:amount(t,d)*q,pend:!!(t&&FLOAT[t]&&!d[FLOAT[t]])};
   });
-  const cy=cycOf(s);
+  const cy=cycOf(s),tot=s.len>0?s.len:(s.end?schedCount(s.start,s.end):0);
   rows.forEach((r,j)=>{r.no=cy?j%cy+1:j+1;r.round=cy?Math.floor(j/cy)+1:1});
-  return{rows,before:Object.values(draws).filter(d=>d.d<s.start).length,k:rows.length,cost:rows.length*PRICE*q,prize:rows.reduce((a,r)=>a+r.amt,0)};
+  return{rows,before:Object.values(draws).filter(d=>d.d<s.start).length,k:rows.length,cost:(tot||rows.length)*PRICE*q,tot,prize:rows.reduce((a,r)=>a+r.amt,0)};
 }
 
 // ---- data fetch ----
@@ -284,7 +293,7 @@ function render(){
     ${lastLine(s,e)}
     ${e.before?`<div class="mu" style="color:#f59e0b">另有 ${e.before} 期開獎早於購買日，未計入成本與獎金（這是正常的，買票前的開獎不該算）。</div>`:''}
     ${e.rows.some(r=>r.pend)?`<div class="mu" style="color:#f59e0b">有 ${e.rows.filter(r=>r.pend).length} 期中了浮動獎金但金額待填（${e.rows.filter(r=>r.pend).map(r=>r.d.d.slice(5)+r.t).join('、')}），累計中獎金額暫未含這些。請到各期明細按「改」補上金額。</div>`:''}
-    <div class="stats"><div><span class="mu">累計成本</span><b>${$$(e.cost)}</b></div>
+    <div class="stats"><div><span class="mu">${e.tot?'購買成本':'累計成本'}</span><b>${$$(e.cost)}</b>${e.tot?`<span class="mu">${e.tot}期預付${s.qty>1?'×'+s.qty+'注':''}</span>`:''}</div>
       <div><span class="mu">累計中獎</span><b class="up">${$$(e.prize)}</b></div>
       <div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div></div>
     <details><summary>各期明細</summary><table><tr><th>組內期別</th><th>開獎</th><th>結果</th><th class="n">金額</th></tr>
