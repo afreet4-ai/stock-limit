@@ -42,7 +42,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 </head>
 <body>
 <main>
-<h1>🎯 大樂透自動對獎 <span class="mu">v19</span></h1>
+<h1>🎯 大樂透自動對獎 <span class="mu">v20</span></h1>
 
 <div class="card">
   <div class="row" style="justify-content:space-between">
@@ -134,11 +134,24 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 
 <script>
 const $=id=>document.getElementById(id);
+Date.prototype.ymd=function(){return this.getFullYear()+'-'+String(this.getMonth()+1).padStart(2,'0')+'-'+String(this.getDate()).padStart(2,'0')};
 const PRICE=50;
 const rangeAll=()=>{const a=Object.values(draws).map(d=>d.d).sort();return a.length?a.length+' 期（'+a[0]+' ～ '+a[a.length-1]+'）':'0 期'};
-const addDays=(ds,n)=>{const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return d.toLocaleDateString('sv')};
+const addDays=(ds,n)=>{const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return d.ymd()};
 function schedCount(a,b){let c=0,d=new Date(a+'T00:00:00');const e=new Date(b+'T00:00:00');for(let i=0;d<=e&&i<4000;i++){const w=d.getDay();if(w===2||w===5)c++;d.setDate(d.getDate()+1)}return c}
-function endForCount(a,n){let c=0,d=new Date(a+'T00:00:00');for(let i=0;i<4000;i++){const w=d.getDay();if(w===2||w===5){c++;if(c===n)return d.toLocaleDateString('sv')}d.setDate(d.getDate()+1)}return a}
+function endForCount(a,n){let c=0,d=new Date(a+'T00:00:00');for(let i=0;i<4000;i++){const w=d.getDay();if(w===2||w===5){c++;if(c===n)return d.ymd()}d.setDate(d.getDate()+1)}return a}
+const isDD=ds=>{const w=new Date(ds+'T00:00:00').getDay();return w===2||w===5};
+function prevDraw(ds){let x=ds;for(let i=0;i<8;i++){if(isDD(x))return x;x=addDays(x,-1)}return ds}
+function planRows(s,e){
+  const cy=cycOf(s),tot=s.len>0?s.len:(s.end?schedCount(s.start,s.end):0);
+  if(!(tot>e.k))return '';
+  let cur=e.k?e.rows[e.k-1].d.d:addDays(s.start,-1);const out=[];
+  for(let j=e.k;j<tot;j++){
+    cur=nextSched(cur);if(s.end&&cur>s.end)break;
+    out.push(`<tr style="opacity:.6"><td><b>${cy?j%cy+1:j+1}</b>${cy&&j>=cy?'<span class="mu">（第'+(Math.floor(j/cy)+1)+'輪）</span>':''}<div class="mu">${cur.slice(5)}</div></td><td colspan="3" class="mu">待開獎（預估日期）</td></tr>`);
+  }
+  return out.reverse().join('');
+}
 function lastInfo(s,e){
   if(!(s.len>0))return null;
   if(e.k>=s.len)return{d:e.rows[s.len-1].d.d,est:false,left:0};
@@ -168,7 +181,7 @@ function putDraw(o){
 function normDraws(o){const src=Object.values(o||{});draws={};src.forEach(x=>{if(x&&x.d&&x.m)putDraw(x)})}
 sets.forEach(x=>{if(x.id==null)x.id=Date.now()+Math.random()});
 normDraws(rd('lottoDraws',{}));try{localStorage.setItem('lottoDraws',JSON.stringify(draws))}catch(e){}
-const today=()=>new Date().toLocaleDateString('sv');
+const today=()=>new Date().ymd();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const $$=n=>'$'+n.toLocaleString();
 const pad=n=>String(n).padStart(2,'0');
@@ -265,7 +278,7 @@ function render(){
       <span class="tag ${done?'ok':''}">${done?(s.end&&today()>s.end?'已到期':'已完成'):'進行中'} ${spanTxt(s,e)}</span></div>
     <div class="mu">${esc(s.label||'')} 購買日 ${s.start}</div>
     <div class="mu">${e.k?'計入 '+e.rows[0].d.d+' ～ '+e.rows[e.k-1].d.d+'，共 '+e.k+' 期':'尚無已開獎期數'}｜${s.len>0?'期數上限 '+s.len:'不限期數'}${s.qty>1?'｜<b>'+s.qty+' 注</b>（成本與獎金×'+s.qty+'）':''}</div>
-    ${s.end?(()=>{const n=schedCount(s.start,s.end);return `<div class="mu">購買期間 ${s.start} ～ ${s.end}｜預估共 ${n} 期（以週二、週五推算）｜已開 ${e.k} 期${today()>s.end?'（已到期）':'，尚餘約 '+Math.max(0,n-e.k)+' 期'}</div>`})():''}
+    ${s.end?(()=>{const n=schedCount(s.start,s.end);return `<div class="mu">購買期間 ${s.start} ～ ${s.end}｜預估共 ${n} 期（以週二、週五推算）｜已開 ${e.k} 期${today()>s.end?'（已到期）':'，尚餘約 '+Math.max(0,n-e.k)+' 期'}</div>${isDD(s.end)?'':`<div style="color:#f59e0b" class="mu">⚠️ 迄日 ${s.end} 不是開獎日（週二、週五），實際最後一期是 ${prevDraw(s.end)}，下一個開獎日 ${nextSched(s.end)} 不會計入。要多買一期請把迄日改成開獎日，或改用「期數上限」。</div>`}`})():''}
     ${lastLine(s,e)}
     ${e.before?`<div class="mu" style="color:#f59e0b">另有 ${e.before} 期開獎早於購買日，未計入成本與獎金（這是正常的，買票前的開獎不該算）。</div>`:''}
     ${e.rows.some(r=>r.pend)?`<div class="mu" style="color:#f59e0b">有 ${e.rows.filter(r=>r.pend).length} 期中了浮動獎金但金額待填（${e.rows.filter(r=>r.pend).map(r=>r.d.d.slice(5)+r.t).join('、')}），累計中獎金額暫未含這些。請到各期明細按「改」補上金額。</div>`:''}
@@ -273,7 +286,7 @@ function render(){
       <div><span class="mu">累計中獎</span><b class="up">${$$(e.prize)}</b></div>
       <div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div></div>
     <details><summary>各期明細</summary><table><tr><th>組內期別</th><th>開獎</th><th>結果</th><th class="n">金額</th></tr>
-    ${e.rows.slice().reverse().map(r=>`<tr><td><b>${r.no}</b>${r.round>1?'<span class="mu">（第'+r.round+'輪）</span>':''}<div class="mu">${r.d.d.slice(5)}</div><button class="g sm" data-ed="${r.d.d}">改</button><button class="r sm" data-dd="${r.d.d}">刪</button></td>
+    ${planRows(s,e)}${e.rows.slice().reverse().map(r=>`<tr><td><b>${r.no}</b>${r.round>1?'<span class="mu">（第'+r.round+'輪）</span>':''}<div class="mu">${r.d.d.slice(5)}</div><button class="g sm" data-ed="${r.d.d}">改</button><button class="r sm" data-dd="${r.d.d}">刪</button></td>
       <td>${balls(r.d.m,s.n,0).replace(/ball /g,'ball ')}<span class="ball sp">${pad(r.d.s)}</span></td>
       <td>${r.t?'<b class="up">'+r.t+'</b>':'<span class="mu">未中</span>'}<div class="mu">中${r.h}${r.sp?'+特':''}</div></td>
       <td class="n">${r.t?(r.pend?'待填':$$(r.amt)):''}<div class="mu">累計 ${$$(r.cum)}</div></td></tr>`).join('')||'<tr><td colspan="4" class="mu">尚無已開獎期數</td></tr>'}
@@ -358,7 +371,7 @@ $('add').onclick=()=>{
     const o=sets[editIdx],ns=$('start').value||today(),nl=parseInt($('len').value)||0,ne=$('end').value||'';
     const tot=nl>0?nl:(ne?schedCount(ns,ne):0),oc=o.cyc>0?o.cyc:0;
     Object.assign(o,{n:ok[0],start:ns,label:$('label').value.trim(),len:nl,qty:Math.max(1,parseInt($('qty').value)||1),end:ne,cyc:(oc>0&&tot>0&&tot%oc===0)?oc:tot});
-    wr('lottoSets',sets);endEdit();$('amsg').textContent='已修改';render();return;
+    wr('lottoSets',sets);endEdit();$('amsg').textContent='已修改'+(ne&&!isDD(ne)?'；⚠️ 迄日 '+ne+' 不是開獎日，實際最後一期是 '+prevDraw(ne):'');render();return;
   }
   const{ok,bad}=parseLines($('nums').value);
   if(!ok.length){$('amsg').textContent='⚠️ 沒有有效號碼（需 6 個不重複的 1～49）';return}
@@ -366,7 +379,7 @@ $('add').onclick=()=>{
   if(en&&en<st){$('amsg').textContent='⚠️ 迄日不能早於購買日期';return}
   ok.forEach(n=>sets.push({id:Date.now()+Math.random(),n,start:st,label:lb,len:ln,qty:qy,end:en,cyc:ln>0?ln:(en?schedCount(st,en):0)}));
   wr('lottoSets',sets);$('nums').value='';
-  $('amsg').textContent='已加入 '+ok.length+' 組'+(bad.length?'；略過無效 '+bad.length+' 行':'');
+  $('amsg').textContent='已加入 '+ok.length+' 組'+(bad.length?'；略過無效 '+bad.length+' 行':'')+(en&&!isDD(en)?'；⚠️ 迄日 '+en+' 不是開獎日，實際最後一期是 '+prevDraw(en):'');
   render();
 };
 $('rnd').onclick=()=>{
