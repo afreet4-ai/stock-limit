@@ -56,10 +56,10 @@ tr.m td{background:color-mix(in srgb,var(--badb) 45%,transparent)}
  <button id="exp" style="margin-left:auto">匯出 Excel</button>
 </div>
 <div class="wrap"><table><thead><tr>
-<th>狀態</th><th>站別</th><th>藥品台大碼(8碼)</th><th>庫存碼(4碼)</th><th>商品名</th><th class="n">互領數量</th><th>單位</th><th>刷碼時間</th><th>開方→領藥</th><th>互領核對</th><th>轉帳單(收←發)</th><th class="n">該碼互領合計</th><th class="n">該碼轉帳合計</th><th>備註</th>
+<th>狀態</th><th>站別</th><th>轉帳藥站</th><th>藥品台大碼(8碼)</th><th>庫存碼(4碼)</th><th>商品名</th><th class="n">互領數量</th><th>單位</th><th>刷碼時間</th><th>開方→領藥</th><th>互領核對</th><th>轉帳單(收←發)</th><th class="n">該碼互領合計</th><th class="n">該碼轉帳合計</th><th>備註</th>
 </tr></thead><tbody id="tb"></tbody></table></div>
 <div class="note" style="margin-top:10px">
-<b>判定規則：</b>互領 4碼出現在 Receive Report →「已轉帳」；未出現且刷碼日期落在已載入 Receive Report 涵蓋日期內 →「遺漏未轉帳」；未出現但刷碼日期不在已載入 Receive Report 涵蓋的日期內 →「待確認」（請補上對應日期的 Receive Report）。8碼若對應多個站別，會以「／」並列。
+<b>判定規則：</b>互領 4碼出現在 Receive Report →「已轉帳」；未出現且刷碼日期落在已載入 Receive Report 涵蓋日期內 →「遺漏未轉帳」；未出現但刷碼日期不在已載入 Receive Report 涵蓋的日期內 →「待確認」（請補上對應日期的 Receive Report）。8碼若對應多個站別，會以「／」並列，並優先用互領報表的「轉帳藥站」縮小範圍。轉帳藥站格式為「開方端→領藥端」，與 Receive Report 的「收藥部門←發藥部門」互為對應，不一致時會在備註提示。
 </div>
 </div>
 
@@ -152,11 +152,15 @@ function run(){
   let use=ent.filter(e=>e.k4===k4);const notes=[];
   if(!ent.length)notes.push('藥站名細查無此8碼');
   else if(!use.length){use=ent;notes.push('庫存碼與藥站名細不符('+[...new Set(ent.map(e=>e.k4))].join('/')+')')}
+  const ts=String(r['轉帳藥站']||'').replace(/\s/g,''),pair=ts.split(/→|->|>/).filter(Boolean);
+  if(pair.length===2&&use.length>1){const u2=use.filter(e=>pair.includes(e.st));if(u2.length)use=u2}
+  if(pair.length===2&&use.length&&!use.some(e=>pair.includes(e.st)))notes.push('藥站名細站別('+[...new Set(use.map(e=>e.st))].join('/')+')不在轉帳藥站內');
   const st=[...new Set(use.map(e=>e.st))].join('／'),name=use[0]?use[0].name:'';
   const rec=rm.get(k4),d=dt(r['刷碼時間']);let s;
   if(rec)s='ok';else if(!ign&&S.cov.size&&!S.cov.has(d)){s='wn';notes.push('刷碼日不在轉帳報表涵蓋日期')}else s='bad';
   if(rec&&rec.qty!==tot.get(k4))notes.push('數量不一致');
-  return{s,st,c8,k4,name,qty:r['數量'],unit:r['單位'],time:r['刷碼時間'],dir:(r['開方院區']||'')+'→'+(r['領藥院區']||''),chk:r['核對狀態']||'',
+  if(rec&&pair.length===2&&!rec.io.has(pair[1]+'←'+pair[0]))notes.push('轉帳單部門('+[...rec.io].join('、')+')與互領轉帳藥站不符');
+  return{s,st,ts,c8,k4,name,qty:r['數量'],unit:r['單位'],time:r['刷碼時間'],dir:(r['開方院區']||'')+'→'+(r['領藥院區']||''),chk:r['核對狀態']||'',
    io:rec?[...rec.io].join('、'):'',tot:tot.get(k4),rq:rec?rec.qty:'',note:notes.join('；')}});
  const ord={bad:0,wn:1,ok:2};rows.sort((a,b)=>ord[a.s]-ord[b.s]);
  render();
@@ -174,8 +178,8 @@ function render(){
  document.querySelectorAll('[data-x]').forEach(a=>a.onclick=e=>{e.preventDefault();S.recvFiles.splice(+a.dataset.x,1);run()});
  const cb=$('#clr');if(cb)cb.onclick=()=>{S.recvFiles=[];run()};
  const v=rows.filter(r=>(S.filter==='all'||r.s===S.filter)&&(!q||[r.st,r.c8,r.k4,r.name].join(' ').toUpperCase().includes(q)));
- $('#tb').innerHTML=v.map(r=>`<tr class="${r.s==='bad'?'m':''}"><td><span class="tag ${r.s}">${LB[r.s]}</span></td><td>${esc(r.st)}</td><td>${esc(r.c8)}</td><td>${esc(r.k4)}</td><td>${esc(r.name)}</td><td class="n">${esc(r.qty)}</td><td>${esc(r.unit)}</td><td>${esc(r.time)}</td><td>${esc(r.dir)}</td><td>${esc(r.chk)}</td><td>${esc(r.io)}</td><td class="n">${esc(r.tot)}</td><td class="n">${esc(r.rq)}</td><td>${esc(r.note)}</td></tr>`).join('')
-  ||'<tr><td colspan="14" style="text-align:center;color:var(--mu)">'+(rows.length?'無符合資料':'請先載入三份檔案')+'</td></tr>';
+ $('#tb').innerHTML=v.map(r=>`<tr class="${r.s==='bad'?'m':''}"><td><span class="tag ${r.s}">${LB[r.s]}</span></td><td>${esc(r.st)}</td><td>${esc(r.ts)}</td><td>${esc(r.c8)}</td><td>${esc(r.k4)}</td><td>${esc(r.name)}</td><td class="n">${esc(r.qty)}</td><td>${esc(r.unit)}</td><td>${esc(r.time)}</td><td>${esc(r.dir)}</td><td>${esc(r.chk)}</td><td>${esc(r.io)}</td><td class="n">${esc(r.tot)}</td><td class="n">${esc(r.rq)}</td><td>${esc(r.note)}</td></tr>`).join('')
+  ||'<tr><td colspan="15" style="text-align:center;color:var(--mu)">'+(rows.length?'無符合資料':'請先載入三份檔案')+'</td></tr>';
 }
 function mark(k,name){const d=$('#d-'+k);d.classList.add('done');d.querySelector('small').textContent=name}
 function load(k,ab,name){
@@ -194,7 +198,7 @@ document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{S.filter=b.datas
 $('#q').oninput=render;$('#ign').onchange=run;
 $('#exp').onclick=()=>{
  if(!rows.length)return;
- const v=rows.map(r=>({狀態:LB[r.s],站別:r.st,'藥品台大碼(8碼)':r.c8,'庫存碼(4碼)':r.k4,商品名:r.name,互領數量:r.qty,單位:r.unit,刷碼時間:r.time,'開方→領藥':r.dir,互領核對:r.chk,'轉帳單(收←發)':r.io,該碼互領合計:r.tot,該碼轉帳合計:r.rq,備註:r.note}));
+ const v=rows.map(r=>({狀態:LB[r.s],站別:r.st,轉帳藥站:r.ts,'藥品台大碼(8碼)':r.c8,'庫存碼(4碼)':r.k4,商品名:r.name,互領數量:r.qty,單位:r.unit,刷碼時間:r.time,'開方→領藥':r.dir,互領核對:r.chk,'轉帳單(收←發)':r.io,該碼互領合計:r.tot,該碼轉帳合計:r.rq,備註:r.note}));
  const wb=XLSX.utils.book_new();
  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(v),'比對結果');
  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(v.filter(x=>x.狀態==='遺漏未轉帳')),'遺漏未轉帳');
