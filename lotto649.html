@@ -42,7 +42,7 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 </head>
 <body>
 <main>
-<h1>🎯 大樂透自動對獎 <span class="mu">v23</span></h1>
+<h1>🎯 大樂透自動對獎 <span class="mu">v25</span></h1>
 
 <div class="card">
   <div class="row" style="justify-content:space-between">
@@ -97,10 +97,10 @@ details summary{cursor:pointer;color:var(--ac);margin-top:6px}
 
 <details class="card" id="mbox">
   <summary>開獎紀錄與手動輸入</summary>
-  <div class="mu" id="dcnt" style="margin-top:8px"></div><div style="max-height:320px;overflow:auto"><table id="dl"></table></div>
-  <p class="mu">頭獎、貳獎、參獎、肆獎是浮動獎金，每期金額不同；中到時會顯示「待填」，請點上方列表的該期帶入表單，再填金額。列表中日期後面有 ⚠️ 的，表示不是週二或週五，請檢查是不是輸入錯誤。</p>
+  <div class="mu" id="dcnt" style="margin-top:8px"></div><div class="mu" id="mcnt"></div><div style="max-height:320px;overflow:auto"><table id="dl"></table></div>
+  <p class="mu">頭獎、貳獎、參獎、肆獎是浮動獎金，每期金額不同；中到時會顯示「待填」，請點上方列表的該期帶入表單，再填金額。列表中日期後面標「加開」的，是不在週二、週五的開獎（例如春節加碼每天開獎）；如果不是加開，請檢查是不是輸入錯誤。</p>
   <div class="row"><input id="mp" placeholder="期別（可自訂，如 1～10）"><input type="date" id="md"></div>
-  <div class="row" style="margin-top:6px"><button class="g" id="suggest" type="button">帶入下一期（日期＋期別）</button></div>
+  <div class="row" style="margin-top:6px"><button class="g" id="suggest" type="button">帶入下一期（日期＋期別）</button><label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" id="daily" style="flex:none;padding:0;width:20px;height:20px">加開期間（每天開獎）</label></div>
   <div class="mu" style="margin-top:8px">開獎號碼（6 個＋特別號）</div>
   <div class="row" style="margin-top:4px;gap:5px;flex-wrap:nowrap">
     <input class="nb" inputmode="numeric" maxlength="2" placeholder="1"><input class="nb" inputmode="numeric" maxlength="2" placeholder="2"><input class="nb" inputmode="numeric" maxlength="2" placeholder="3"><input class="nb" inputmode="numeric" maxlength="2" placeholder="4"><input class="nb" inputmode="numeric" maxlength="2" placeholder="5"><input class="nb" inputmode="numeric" maxlength="2" placeholder="6">
@@ -140,7 +140,8 @@ const rangeAll=()=>{const a=Object.values(draws).map(d=>d.d).sort();return a.len
 const addDays=(ds,n)=>{const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return d.ymd()};
 function schedCount(a,b){let c=0,d=new Date(a+'T00:00:00');const e=new Date(b+'T00:00:00');for(let i=0;d<=e&&i<4000;i++){const w=d.getDay();if(w===2||w===5)c++;d.setDate(d.getDate()+1)}return c}
 function endForCount(a,n){let c=0,d=new Date(a+'T00:00:00');for(let i=0;i<4000;i++){const w=d.getDay();if(w===2||w===5){c++;if(c===n)return d.ymd()}d.setDate(d.getDate()+1)}return a}
-const isDD=ds=>{const w=new Date(ds+'T00:00:00').getDay();return w===2||w===5};
+const isReg=ds=>{const w=new Date(ds+'T00:00:00').getDay();return w===2||w===5};
+const isDD=ds=>!!draws[ds]||isReg(ds);
 function prevDraw(ds){let x=ds;for(let i=0;i<8;i++){if(isDD(x))return x;x=addDays(x,-1)}return ds}
 function planRows(s,e){
   const cy=cycOf(s),tot=s.len>0?s.len:(s.end?schedCount(s.start,s.end):0);
@@ -210,7 +211,7 @@ function evalSet(s){
     const h=s.n.filter(x=>d.m.includes(x)).length,sp=s.n.includes(d.s),t=tier(h,sp);
     return{d,h,sp,t,amt:amount(t,d)*q,pend:!!(t&&FLOAT[t]&&!d[FLOAT[t]])};
   });
-  const cy=cycOf(s),tot=s.len>0?s.len:(s.end?schedCount(s.start,s.end):0);
+  const cy=cycOf(s),tot=s.len>0?s.len:(s.end?Math.max(schedCount(s.start,s.end),rows.length):0);
   rows.forEach((r,j)=>{r.no=cy?j%cy+1:j+1;r.round=cy?Math.floor(j/cy)+1:1});
   return{rows,before:Object.values(draws).filter(d=>d.d<s.start).length,k:rows.length,cost:(tot||rows.length)*PRICE*q,tot,prize:rows.reduce((a,r)=>a+r.amt,0)};
 }
@@ -322,8 +323,9 @@ function render(){
   }
   const net=tp-tc;
   $('sum').innerHTML=`<div><span class="mu">總成本</span><b>${$$(tc)}</b></div><div><span class="mu">總中獎</span><b class="up">${$$(tp)}</b></div><div><span class="mu">淨損益</span><b class="${net>=0?'up':'dn'}">${net<0?'-':''}${$$(Math.abs(net))}</b></div>`;
+  {const mc={};all.forEach(d=>{const m=d.d.slice(0,7);mc[m]=(mc[m]||0)+1});$('mcnt').textContent='各月期數：'+Object.keys(mc).sort().map(m=>m+' '+mc[m]+'期').join('｜')}
   $('dcnt').textContent='共 '+rangeAll()+'開獎紀錄（由新到舊，可捲動）';
-  $('dl').innerHTML='<tr><th>期別</th><th>日期</th><th>號碼</th></tr>'+all.map(d=>`<tr data-p="${d.d}" style="cursor:pointer"><td>${d.p}</td><td>${d.d.slice(5)}${isDD(d.d)?'':' ⚠️'}</td><td>${d.m.map(pad).join(' ')} +${pad(d.s)}</td></tr>`).join('');
+  $('dl').innerHTML='<tr><th>期別</th><th>日期</th><th>號碼</th></tr>'+all.map(d=>`<tr data-p="${d.d}" style="cursor:pointer"><td>${d.p}</td><td>${d.d.slice(5)}${isReg(d.d)?'':' <span class="mu">加開</span>'}</td><td>${d.m.map(pad).join(' ')} +${pad(d.s)}</td></tr>`).join('');
 }
 
 // ---- actions ----
@@ -564,7 +566,7 @@ function suggestNext(force){
   let np;
   if(longP(L.p))np=String(Number(L.p)+1);
   else{const cy=Math.max(10,...sets.map(cycOf));np=String((Number(L.p)||0)%cy+1)}
-  $('md').value=nextSched(L.d);$('mp').value=np;
+  $('md').value=$('daily').checked?addDays(L.d,1):nextSched(L.d);$('mp').value=np;
 }
 $('suggest').onclick=()=>{clearNums();['a1','a2','a3','a4'].forEach(i=>$(i).value='');suggestNext(true);$('msg').textContent='已帶入下一期的日期與期別，請填號碼'};
 $('start').value=today();
