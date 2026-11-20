@@ -149,6 +149,14 @@
   }
   .stat-card .num{ font-family:var(--mono); font-size:20px; font-weight:700; color:var(--teal-deep); }
   .stat-card .lbl{ font-size:11px; color:var(--ink-soft); margin-top:2px; }
+  /* 統計卡片可點擊：直接跳到表格中對應的分類區塊 */
+  .stat-card[data-jump]{ cursor:pointer; transition:border-color .15s, box-shadow .15s, transform .1s; }
+  .stat-card[data-jump]:hover{ border-color:var(--teal-deep); box-shadow:0 2px 8px rgba(0,0,0,.08); }
+  .stat-card[data-jump]:active{ transform:scale(.97); }
+  .stat-card.zero{ opacity:.55; }
+  tbody tr[data-jump]{ scroll-margin-top:56px; }
+  @keyframes jumpFlash{ 0%,60%{ box-shadow:inset 0 0 0 100px rgba(255,214,0,.45); } 100%{ box-shadow:inset 0 0 0 100px rgba(255,214,0,0); } }
+  tbody tr.jump-flash td{ animation:jumpFlash 1.6s ease-out; }
 
   /* toolbar */
   .toolbar{
@@ -1186,15 +1194,16 @@ function renderStats(){
   const row = document.getElementById('statsRow');
 
   if(categoryMode(state.activeCat) === 'level-type'){
-    const cards = [['總品項', items.length]];
+    const cards = [['總品項', items.length, '']];
     levelsFor(state.activeCat).forEach(lvl=>{
-      cards.push([lvl.key, items.filter(it => it.level === lvl.key).length]);
+      cards.push([lvl.key, items.filter(it => it.level === lvl.key).length, lvl.key]);
     });
     row.innerHTML = cards.map(c => `
-      <div class="stat-card">
+      <div class="stat-card${c[1] ? '' : ' zero'}" data-jump="${escapeHtml(c[2])}" title="${c[1] ? '點一下跳到「' + escapeHtml(c[0]) + '」' : '目前沒有品項'}">
         <div class="num">${c[1]}</div>
         <div class="lbl">${c[0]}</div>
       </div>`).join('');
+    bindStatJump();
     return;
   }
 
@@ -1202,13 +1211,45 @@ function renderStats(){
   const counts = {};
   options.forEach(o => counts[o] = 0);
   items.forEach(it => { if(counts.hasOwnProperty(it.status)) counts[it.status]++; });
-  const cards = [['總品項', items.length]];
-  options.forEach(o => cards.push([(STATUS_META[o]||{label:o}).label, counts[o]]));
+  const cards = [['總品項', items.length, '']];
+  options.forEach(o => cards.push([(STATUS_META[o]||{label:o}).label, counts[o], o]));
   row.innerHTML = cards.map(c => `
-    <div class="stat-card">
+    <div class="stat-card${c[1] ? '' : ' zero'}" data-jump="${escapeHtml(c[2])}" title="${c[1] ? '點一下跳到「' + escapeHtml(c[0]) + '」' : '目前沒有品項'}">
       <div class="num">${c[1]}</div>
       <div class="lbl">${c[0]}</div>
     </div>`).join('');
+  bindStatJump();
+}
+
+// 點統計卡片 → 切換成依分類標記排序（才看得到分組標題），再捲動到對應的分類區塊並閃一下提示
+function bindStatJump(){
+  document.querySelectorAll('#statsRow .stat-card').forEach(card=>{
+    card.onclick = ()=> jumpToGroup(card.dataset.jump || '', card.querySelector('.lbl').textContent);
+  });
+}
+function jumpToGroup(key, label){
+  if(state.sortKey !== 'status'){
+    state.sortKey = 'status';
+    state.sortDir = 1;
+    renderAll();
+  }
+  const tbody = document.getElementById('tbody');
+  let target = null;
+  if(key){
+    target = Array.from(tbody.querySelectorAll('tr[data-jump]')).find(tr => tr.dataset.jump === key) || null;
+    if(!target){
+      showToast(state.search ? `目前搜尋條件下沒有「${label}」的品項` : `目前沒有「${label}」的品項`);
+      return;
+    }
+  }else{
+    target = tbody.firstElementChild; // 總品項 → 回到表格最上面
+  }
+  if(!target) return;
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  target.classList.remove('jump-flash');
+  void target.offsetWidth; // 重新觸發動畫
+  target.classList.add('jump-flash');
+  setTimeout(()=> target.classList.remove('jump-flash'), 1800);
 }
 
 function getFilteredSorted(){
@@ -1288,6 +1329,7 @@ function renderTable(){
         if(isLevelStart){
           const row = document.createElement('tr');
           row.className = 'level-row';
+          row.dataset.jump = it.level;
           row.innerHTML = `<td></td><td colspan="7">${escapeHtml(levelBannerText(cat, items, it.level))}</td>`;
           tbody.appendChild(row);
         }
@@ -1312,6 +1354,7 @@ function renderTable(){
         const groupCount = items.filter(x => x.status === it.status).length;
         const groupRow = document.createElement('tr');
         groupRow.className = 'group-row';
+        groupRow.dataset.jump = it.status;
         groupRow.innerHTML = `<td></td><td colspan="7">${escapeHtml(label)}（${groupCount}）</td>`;
         tbody.appendChild(groupRow);
       }
